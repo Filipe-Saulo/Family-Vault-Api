@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("family-vault-api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+36dc7817ecd1f5a6b4b20125c2d1899f4f79a7b9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+93e34bec93b5cad6776437b2ac3c0af4e856f59e")]
 [assembly: System.Reflection.AssemblyProductAttribute("family-vault-api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("family-vault-api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

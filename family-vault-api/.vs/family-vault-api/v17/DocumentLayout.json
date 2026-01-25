@@ -1,7 +1,16 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "L:\\Developmentspace\\family-vault-api\\family-vault-api\\",
-  "Documents": [],
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{607F4578-4F2D-4990-96EA-F65A4FA41D68}|family-vault-api.csproj|l:\\developmentspace\\family-vault-api\\family-vault-api\\testforcommit.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{607F4578-4F2D-4990-96EA-F65A4FA41D68}|family-vault-api.csproj|solutionrelative:testforcommit.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{607F4578-4F2D-4990-96EA-F65A4FA41D68}|family-vault-api.csproj|l:\\developmentspace\\family-vault-api\\family-vault-api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{607F4578-4F2D-4990-96EA-F65A4FA41D68}|family-vault-api.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
@@ -9,11 +18,37 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": -1,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Bookmark",
               "Name": "ST:128:0:{75188d03-9892-4ae2-abf1-207126247ce5}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "testForCommit.cs",
+              "DocumentMoniker": "L:\\Developmentspace\\family-vault-api\\family-vault-api\\testForCommit.cs",
+              "RelativeDocumentMoniker": "testForCommit.cs",
+              "ToolTip": "L:\\Developmentspace\\family-vault-api\\family-vault-api\\testForCommit.cs",
+              "RelativeToolTip": "testForCommit.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-25T22:20:09.819Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Program.cs",
+              "DocumentMoniker": "L:\\Developmentspace\\family-vault-api\\family-vault-api\\Program.cs",
+              "RelativeDocumentMoniker": "Program.cs",
+              "ToolTip": "L:\\Developmentspace\\family-vault-api\\family-vault-api\\Program.cs",
+              "RelativeToolTip": "Program.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-25T22:19:19.207Z",
+              "EditorCaption": ""
             }
           ]
         }
