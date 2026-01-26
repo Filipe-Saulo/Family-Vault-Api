@@ -1,0 +1,188 @@
+﻿using FamilyVaultApi.Common.Validators;
+using FamilyVaultApi.Exceptions;
+using FamilyVaultApi.Models.Dto.Requests.Account;
+using FamilyVaultApi.Models.Dto.Responses.Account;
+using FamilyVaultApi.Repositories.IRepository;
+using FamilyVaultApi.Services.IService;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+
+namespace FamilyVaultApi.Services.Service
+{
+    public class AccountService : IAccountService
+    {
+        private readonly IAccountRepository _repository;
+
+        public AccountService(IAccountRepository repository)
+        {
+            _repository = repository;
+        }
+
+        internal class RegisterContext
+        {
+            public string? Email { get; init; }
+            public string? Phone { get; init; }
+
+            public bool IsAdmin => !string.IsNullOrEmpty(Email);
+            public bool IsUser => !string.IsNullOrEmpty(Phone) && string.IsNullOrEmpty(Email);
+        }
+
+        private void ValidateCredentials(RegisterContext ctx, List<IdentityError> errors)
+        {
+            if (string.IsNullOrEmpty(ctx.Email) && string.IsNullOrEmpty(ctx.Phone))
+                errors.Add(new IdentityError { Code = "NoCredentials", Description = "Faltam credenciais." });
+        }
+
+        private async Task ValidateEmailAsync(RegisterContext ctx, List<IdentityError> errors)
+        {
+            if (string.IsNullOrEmpty(ctx.Email)) return;
+
+            if (!EmailValidator.Validar(ctx.Email))
+                errors.Add(new IdentityError { Code = "InvalidEmail", Description = "E-mail inválido." });
+
+            if (await _repository.EmailUserExistsAsync(ctx.Email))
+                errors.Add(new IdentityError { Code = "DuplicateEmail", Description = "E-mail já cadastrado." });
+        }
+
+        private async Task<string?> ValidatePhoneAsync(CreateAccountRequestDto dto, List<IdentityError> errors)
+        {
+            if (string.IsNullOrEmpty(dto.Phone)) return null;
+
+            string phone = dto.Phone.Trim();
+            string formatted;
+
+            if (phone.StartsWith("55"))
+            {
+                if (!PhoneValidator.ValidarCelularBr(phone, out formatted))
+                {
+                    errors.Add(new IdentityError { Code = "InvalidPhone", Description = "Telefone brasileiro inválido." });
+                    return null;
+                }
+            }
+            else
+            {
+                if (!PhoneValidator.ValidarCelularInternacional(phone))
+                {
+                    errors.Add(new IdentityError { Code = "InvalidPhone", Description = "Telefone internacional inválido." });
+                    return null;
+                }
+                formatted = phone;
+            }
+
+            if (await _repository.PhoneExistsAsync(formatted))
+            {
+                errors.Add(new IdentityError { Code = "DuplicatePhoneNumber", Description = "Número já cadastrado." });
+                return null;
+            }
+
+            return formatted;
+        }
+
+        public async Task<IEnumerable<IdentityError>> RegisterAsync(CreateAccountRequestDto dto)
+        {
+            var errors = new List<IdentityError>();
+
+            var ctx = new RegisterContext
+            {
+                Email = dto.Email,
+                Phone = dto.Phone,
+            };
+
+            ValidateCredentials(ctx, errors);
+            await ValidateEmailAsync(ctx, errors);
+            var phoneFormated = await ValidatePhoneAsync(dto, errors);
+
+            if (dto.Password != dto.PasswordConfirm)
+                errors.Add(new IdentityError { Code = "PasswordMismatch", Description = "As senhas não conferem." });
+
+            if (errors.Any())
+                return errors;
+
+            // Decide fluxo
+            return ctx.IsAdmin
+                ? await _repository.RegisterAdmin(dto)
+                : await _repository.RegisterUser(dto, phoneFormated);
+        }
+
+        public async Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto)
+        {
+            bool isAdmin = !string.IsNullOrEmpty(loginDto.Email) && string.IsNullOrEmpty(loginDto.Phone);
+            bool isUser = string.IsNullOrEmpty(loginDto.Email) && !string.IsNullOrEmpty(loginDto.Phone);
+
+            if (string.IsNullOrEmpty(loginDto.Email) && string.IsNullOrEmpty(loginDto.Phone))
+                throw new BadRequestException("Usuário não preenchido.");
+
+            if (!isAdmin && !isUser)
+                throw new BadRequestException("Telefone e E-mail estão preenchidos.");
+
+            var authResult = await _repository.Login(loginDto);
+
+            if (authResult == null)
+                throw new UnauthorizedAccessException("Usuário inválido.");
+
+            return new AuthResponseDto
+            {
+                UserId = authResult.UserId,
+                Token = authResult.Token,
+                RefreshToken = authResult.RefreshToken
+            };
+        }
+
+        public async Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request, bool isWeb)
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var tokenContent = handler.ReadJwtToken(request.Token);
+
+            var userId = tokenContent.Claims.FirstOrDefault(c => c.Type == "uid")?.Value
+                ?? throw new SecurityTokenException("Token sem identificador de usuário");
+
+            string userName;
+
+            if (isWeb)
+            {
+                userName = tokenContent.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Email)?.Value;
+                if (string.IsNullOrEmpty(userName))
+                    throw new SecurityTokenException("Token sem email");
+            }
+            else
+            {
+                userName = tokenContent.Claims.FirstOrDefault(c => c.Type == "phone_number")?.Value;
+                if (string.IsNullOrEmpty(userName))
+                    throw new SecurityTokenException("Token sem phone_number");
+            }
+            return await _repository.RefreshTokenAsync(request);
+        }
+
+        public async Task LogoutAsync(ClaimsPrincipal userPrincipal)
+        {
+            var userId = userPrincipal.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
+
+            if (string.IsNullOrEmpty(userId))
+                throw new UnauthorizedAccessException("Token inválido.");
+
+            await _repository.LogoutAsync(userId);
+        }
+
+
+        public async Task ResetPasswordAsync(PasswordResetRequestDto dto, ClaimsPrincipal userClaims)
+        {
+            if (dto.Password != dto.PasswordConfirm)
+                throw new ArgumentException("A senha e a confirmação de senha não coincidem.");
+
+            if (string.IsNullOrWhiteSpace(dto.Phone))
+                throw new ArgumentException("Número de telefone é obrigatório.");
+
+            string uid = null;
+            bool isLogged = userClaims?.Identity?.IsAuthenticated == true;
+
+            if (isLogged)
+            {
+                uid = userClaims.FindFirst("uid")?.Value;
+            }
+
+            await _repository.ResetPasswordAsync(dto, uid, isLogged);
+        }
+    }
+}

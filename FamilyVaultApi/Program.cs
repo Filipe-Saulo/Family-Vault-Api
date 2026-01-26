@@ -1,8 +1,12 @@
 using Asp.Versioning;
 using FamilyVaultApi.Data;
+using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Mapping;
 using FamilyVaultApi.Middleware;
-using k8s.KubeConfigModels;
+using FamilyVaultApi.Repositories.IRepository;
+using FamilyVaultApi.Repositories.Repository;
+using FamilyVaultApi.Services.IService;
+using FamilyVaultApi.Services.Service;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OData;
@@ -102,7 +106,21 @@ apiVersioningBuilder.AddApiExplorer(
 
 builder.Host.UseSerilog((ctx, lc) => lc.WriteTo.Console().ReadFrom.Configuration(ctx.Configuration));
 
+builder.Services.AddIdentity<User, IdentityRole>(options =>
+{
+    options.Password.RequireDigit = true;
+    options.Password.RequireLowercase = true;
+    options.Password.RequireUppercase = false;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequiredLength = 6;
+})
+.AddEntityFrameworkStores<DatabaseContext>()
+.AddDefaultTokenProviders();
+
 builder.Services.AddAutoMapper(typeof(AutoMapperProfile));
+//account
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
