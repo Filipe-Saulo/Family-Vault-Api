@@ -1,5 +1,5 @@
 using Asp.Versioning;
-using FamilyVaultApi.Data.Configurations;
+using FamilyVaultApi.Data;
 using FamilyVaultApi.Mapping;
 using FamilyVaultApi.Middleware;
 using k8s.KubeConfigModels;
