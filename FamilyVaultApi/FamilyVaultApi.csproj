@@ -32,6 +32,11 @@
 
   <ItemGroup>
     <Folder Include="Migrations\" />
+    <Folder Include="Controllers\" />
+    <Folder Include="Repositories\IRepository\" />
+    <Folder Include="Repositories\Repository\" />
+    <Folder Include="Services\IService\" />
+    <Folder Include="Services\Service\" />
   </ItemGroup>
 
 </Project>
