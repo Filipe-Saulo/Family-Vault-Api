@@ -14,10 +14,11 @@ namespace FamilyVaultApi.Services.Service
     public class AccountService : IAccountService
     {
         private readonly IAccountRepository _repository;
-
-        public AccountService(IAccountRepository repository)
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        public AccountService(IAccountRepository repository, IHttpContextAccessor httpContextAccessor)
         {
             _repository = repository;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         internal class RegisterContext
@@ -155,16 +156,40 @@ namespace FamilyVaultApi.Services.Service
             return await _repository.RefreshTokenAsync(request);
         }
 
-        public async Task LogoutAsync(ClaimsPrincipal userPrincipal)
+        public async Task LogoutAsync(string? token = null)
         {
-            var userId = userPrincipal.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
+            var context = _httpContextAccessor.HttpContext;
+            bool isWeb = context?.Request.Headers["User-Agent"].ToString().Contains("Mozilla") ?? false;
+
+            string? userId = null;
+            
+            if (context?.User.Identity?.IsAuthenticated == true)
+            {
+                userId = context.User.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
+            }
+            
+            if (string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(token))
+            {
+                var handler = new JwtSecurityTokenHandler();
+                var jwtToken = handler.ReadJwtToken(token);
+                userId = jwtToken.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
+            }
 
             if (string.IsNullOrEmpty(userId))
-                throw new UnauthorizedAccessException("Token inválido.");
-
+                throw new UnauthorizedAccessException("Token inválido ou ausente.");
+            
             await _repository.LogoutAsync(userId);
+            
+            if (isWeb)
+            {
+                context.Response.Cookies.Delete("refreshToken", new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.None
+                });
+            }
         }
-
 
         public async Task ResetPasswordAsync(PasswordResetRequestDto dto, ClaimsPrincipal userClaims)
         {

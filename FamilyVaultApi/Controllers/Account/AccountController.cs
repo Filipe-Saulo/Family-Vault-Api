@@ -68,22 +68,9 @@ namespace FamilyVaultApi.Controllers.Account
         }
 
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout()
+        public async Task<IActionResult> Logout([FromBody] LogoutRequestDto? request = null)
         {
-            var isWeb = Request.Headers["User-Agent"].ToString().Contains("Mozilla");
-
-            await _accountService.LogoutAsync(User);
-
-            if (isWeb)
-            {
-                Response.Cookies.Delete("refreshToken", new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.None
-                });
-            }
-
+            await _accountService.LogoutAsync(request?.Token);
             return Ok(ApiResponse<object>.Ok("Logout realizado com sucesso."));
         }
 
