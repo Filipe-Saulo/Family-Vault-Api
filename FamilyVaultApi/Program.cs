@@ -77,11 +77,18 @@ builder.Services.AddSwaggerGen(options => {
     });
 });
 
-builder.Services.AddCors(options => {
-    options.AddPolicy("AllowAll",
-        b => b.AllowAnyHeader()
-            .AllowAnyOrigin()
-            .AllowAnyMethod());
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("WebClient", policy =>
+    {
+        policy
+        .WithOrigins(
+        "http://localhost:5174" 
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
+    });
 });
 
 var apiVersioningBuilder = builder.Services.AddApiVersioning(options =>
@@ -167,7 +174,7 @@ app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseHttpsRedirection();
 
-app.UseCors("AllowAll");
+app.UseCors("WebClient");
 
 app.UseResponseCaching();
 
