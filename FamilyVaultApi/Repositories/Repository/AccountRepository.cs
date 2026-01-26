@@ -194,7 +194,7 @@ namespace FamilyVaultApi.Repositories.Repository
                 FirstName = createAccountDto.FirstName,
                 LastName = createAccountDto.LastName,
                 FullName = $"{createAccountDto.FirstName} {createAccountDto.LastName}",
-                PhoneNumber = createAccountDto.Phone,
+                PhoneNumber = createAccountDto.PhoneNumber,
                 RegisteredAt = DateTime.UtcNow,
                 LastLogin = DateTime.UtcNow,                
             };

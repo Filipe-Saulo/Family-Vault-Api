@@ -49,9 +49,9 @@ namespace FamilyVaultApi.Services.Service
 
         private async Task<string?> ValidatePhoneAsync(CreateAccountRequestDto dto, List<IdentityError> errors)
         {
-            if (string.IsNullOrEmpty(dto.Phone)) return null;
+            if (string.IsNullOrEmpty(dto.PhoneNumber)) return null;
 
-            string phone = dto.Phone.Trim();
+            string phone = dto.PhoneNumber.Trim();
             string formatted;
 
             if (phone.StartsWith("55"))
@@ -88,7 +88,7 @@ namespace FamilyVaultApi.Services.Service
             var ctx = new RegisterContext
             {
                 Email = dto.Email,
-                Phone = dto.Phone,
+                Phone = dto.PhoneNumber,
             };
 
             ValidateCredentials(ctx, errors);

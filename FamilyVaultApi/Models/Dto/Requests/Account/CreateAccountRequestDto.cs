@@ -4,7 +4,7 @@ namespace FamilyVaultApi.Models.Dto.Requests.Account
 {
     public class CreateAccountRequestDto
     {
-        public string Phone { get; init; }
+        public string PhoneNumber { get; init; }
         public string Email { get; init; }
         [Required(ErrorMessage = "Password é obrigatório.")]
         public string Password { get; init; }      
