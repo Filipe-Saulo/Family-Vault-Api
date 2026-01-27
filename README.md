@@ -1,7 +1,7 @@
 # Family Vault API
 
 
-**Monolithic .NET 8 Web API** for managing users, accounts, categories, and transactions.  
+**Monolithic .NET 8 API** for managing users, accounts, categories, and transactions.  
 Supports **web and mobile clients**.
 
 
