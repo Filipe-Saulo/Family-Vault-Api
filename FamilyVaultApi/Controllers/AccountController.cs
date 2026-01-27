@@ -5,7 +5,7 @@ using FamilyVaultApi.Models.Dto.Responses.Account;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Mvc;
 
-namespace FamilyVaultApi.Controllers.Account
+namespace FamilyVaultApi.Controllers
 {
     [Route("api")]
     [ApiController]

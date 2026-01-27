@@ -196,7 +196,8 @@ namespace FamilyVaultApi.Repositories.Repository
                 FullName = $"{createAccountDto.FirstName} {createAccountDto.LastName}",
                 PhoneNumber = createAccountDto.PhoneNumber,
                 RegisteredAt = DateTime.UtcNow,
-                LastLogin = DateTime.UtcNow,                
+                LastLogin = DateTime.UtcNow,             
+                Age = createAccountDto.Age
             };
 
             var resultAccount = await _userManager.CreateAsync(user, createAccountDto.Password);
@@ -230,7 +231,8 @@ namespace FamilyVaultApi.Repositories.Repository
                 FullName = $"{createAccountDto.FirstName} {createAccountDto.LastName}",
                 PhoneNumber = phone,
                 RegisteredAt = DateTime.UtcNow,
-                LastLogin = DateTime.UtcNow,                
+                LastLogin = DateTime.UtcNow,        
+                Age = createAccountDto.Age
             };
 
             var resultAccount = await _userManager.CreateAsync(user, createAccountDto.Password);

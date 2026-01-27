@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Results;
 using FamilyVaultApi.Models.Dto.Requests.User;
 
-namespace FamilyVaultApi.Controllers.Account
+namespace FamilyVaultApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
