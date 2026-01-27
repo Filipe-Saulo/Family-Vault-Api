@@ -29,7 +29,7 @@ namespace FamilyVaultApi.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Administrator,User")]
+        [Authorize(Roles = "Administrator, User")]
         public async Task<ActionResult<ApiResponse<PagedResult<TransactionResponseDto>>>> GetAll([FromQuery] TransactionQueryRequestDto query)
         {
             var result = await _transactionService.GetAllAsync(query);
