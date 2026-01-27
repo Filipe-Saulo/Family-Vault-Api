@@ -21,8 +21,7 @@ namespace FamilyVaultApi.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Administrator")]
-        public async Task<ActionResult<ApiResponse<CategoryResponseDto>>> Post(
-            [FromBody] CreateCategoryDto dto)
+        public async Task<ActionResult<ApiResponse<CategoryResponseDto>>> Post([FromBody] CreateCategoryDto dto)
         {
             var result = await _categoryService.CreateAsync(dto);
             return CreatedAtAction(nameof(GetAll),
@@ -31,8 +30,7 @@ namespace FamilyVaultApi.Controllers
 
         [HttpGet]
         [Authorize(Roles = "Administrator, User")]
-        public async Task<ActionResult<ApiResponse<PagedResult<CategoryResponseDto>>>> GetAll(
-            [FromQuery] CategoryQueryRequestDto query)
+        public async Task<ActionResult<ApiResponse<PagedResult<CategoryResponseDto>>>> GetAll([FromQuery] CategoryQueryRequestDto query)
         {
             var result = await _categoryService.GetAllAsync(query);
             return Ok(ApiResponse<PagedResult<CategoryResponseDto>>.Ok(result));
