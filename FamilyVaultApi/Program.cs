@@ -165,7 +165,7 @@ builder.Services.AddAuthentication(options =>
             OnChallenge = context =>
             {
                 context.HandleResponse(); 
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 context.Response.ContentType = "application/json";
                 return context.Response.WriteAsync("{\"message\":\"Acesso negado.\"}");
             }

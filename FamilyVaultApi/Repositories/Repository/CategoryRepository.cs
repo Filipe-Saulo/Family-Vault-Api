@@ -31,7 +31,7 @@ namespace FamilyVaultApi.Repositories.Repository
 
 
             if (!purposeExists)
-                throw new NotFoundException("CategoryPurpose não encontrado", purposeExists);
+                throw new NotFoundException("CategoryPurpose não encontrado", dto.CategoryPurposeId);
 
 
             var entity = _mapper.Map<Category>(dto);

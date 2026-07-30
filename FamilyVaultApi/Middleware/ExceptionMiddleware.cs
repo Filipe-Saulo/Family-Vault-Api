@@ -39,6 +39,11 @@ namespace FamilyVaultApi.Middleware
                     _logger.LogWarning(ex, "Recurso não encontrado");
                     await HandleExceptionAsync(context, HttpStatusCode.NotFound, ex.Message);
                 }
+                catch (NotFoundException ex)
+                {
+                    _logger.LogWarning(ex, "Recurso não encontrado");
+                    await HandleExceptionAsync(context, HttpStatusCode.NotFound, ex.Message);
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Erro inesperado");
