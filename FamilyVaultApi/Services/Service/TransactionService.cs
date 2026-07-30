@@ -1,8 +1,10 @@
-﻿using FamilyVaultApi.Models.Dto.Requests.Transaction;
+﻿using FamilyVaultApi.Exceptions;
+using FamilyVaultApi.Models.Dto.Requests.Transaction;
 using FamilyVaultApi.Models.Dto.Responses.TransactionResponse;
 using FamilyVaultApi.Models.Internal;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.IService;
+using System.Security.Claims;
 
 namespace FamilyVaultApi.Services.Service
 {
@@ -15,10 +17,21 @@ namespace FamilyVaultApi.Services.Service
             _repository = repository;
         }
 
-        public async Task<TransactionResponseDto> CreateAsync(CreateTransactionDto dto)
+        public async Task<TransactionResponseDto> CreateAsync(CreateTransactionDto dto, ClaimsPrincipal userClaims)
         {
             if (dto == null)
                 throw new ArgumentNullException(nameof(dto));
+
+            var isAdmin = userClaims.IsInRole("Administrator");
+
+            if (!isAdmin)
+            {
+                dto.UserId = userClaims.FindFirst("uid")?.Value;
+            }
+            else if (string.IsNullOrEmpty(dto.UserId))
+            {
+                throw new BadRequestException("Informe o UserId da transação.");
+            }
 
             return await _repository.AddAsync(dto);
         }

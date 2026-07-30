@@ -23,7 +23,7 @@ namespace FamilyVaultApi.Controllers
         [Authorize(Roles = "Administrator,User")]
         public async Task<ActionResult<ApiResponse<TransactionResponseDto>>> Post([FromBody] CreateTransactionDto dto)
         {
-            var result = await _transactionService.CreateAsync(dto);
+            var result = await _transactionService.CreateAsync(dto, User);
             return CreatedAtAction(nameof(GetAll),
                 ApiResponse<TransactionResponseDto>.Created(result));
         }

@@ -2,7 +2,7 @@
 {
     public class CreateTransactionDto
     {
-        public string UserId { get; set; }
+        public string? UserId { get; set; }
         public int CategoryId { get; set; }
         public int TransactionTypeId { get; set; }
         public string Description { get; set; }
