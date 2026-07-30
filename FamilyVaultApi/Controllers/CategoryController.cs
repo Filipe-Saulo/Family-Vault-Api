@@ -20,7 +20,7 @@ namespace FamilyVaultApi.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Administrator")]
+        [Authorize(Roles = "Administrator, User")]
         public async Task<ActionResult<ApiResponse<CategoryResponseDto>>> Post([FromBody] CreateCategoryDto dto)
         {
             var result = await _categoryService.CreateAsync(dto);
