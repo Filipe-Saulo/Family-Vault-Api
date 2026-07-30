@@ -135,9 +135,15 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 //category
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+//category purpose
+builder.Services.AddScoped<ICategoryPurposeService, CategoryPurposeService>();
+builder.Services.AddScoped<ICategoryPurposeRepository, CategoryPurposeRepository>();
 //transaction
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+//transaction type
+builder.Services.AddScoped<ITransactionTypeService, TransactionTypeService>();
+builder.Services.AddScoped<ITransactionTypeRepository, TransactionTypeRepository>();
 
 builder.Services.AddAuthentication(options =>
 {    
