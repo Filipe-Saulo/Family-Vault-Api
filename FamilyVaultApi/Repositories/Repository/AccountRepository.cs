@@ -282,10 +282,15 @@ namespace FamilyVaultApi.Repositories.Repository
         }
 
         public async Task<bool> EmailUserExistsAsync(string email)
-        {            
+        {
 
             return await _context.Users
                 .AnyAsync(u => u.Email == email);
+        }
+
+        public async Task<bool> AdministratorExistsAsync()
+        {
+            return (await _userManager.GetUsersInRoleAsync("Administrator")).Any();
         }
 
    

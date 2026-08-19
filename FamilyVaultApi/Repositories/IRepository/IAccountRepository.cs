@@ -14,6 +14,7 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task LogoutAsync(string userId);
         Task<bool> PhoneExistsAsync(string phoneNumber);
         Task<bool> EmailUserExistsAsync(string email);
+        Task<bool> AdministratorExistsAsync();
         Task ResetPasswordAsync(PasswordResetRequestDto dto, string uid, bool isLogged);
     }
 }

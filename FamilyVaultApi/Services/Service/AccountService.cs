@@ -81,6 +81,18 @@ namespace FamilyVaultApi.Services.Service
             return formatted;
         }
 
+        private async Task ValidateAdminRegistrationAllowedAsync(List<IdentityError> errors)
+        {
+            if (!await _repository.AdministratorExistsAsync())
+                return; // bootstrap: primeiro Administrator pode se registrar livremente
+
+            var caller = _httpContextAccessor.HttpContext?.User;
+            var callerIsAdmin = caller?.Identity?.IsAuthenticated == true && caller.IsInRole("Administrator");
+
+            if (!callerIsAdmin)
+                errors.Add(new IdentityError { Code = "AdminRegistrationRestricted", Description = "Apenas um Administrator autenticado pode cadastrar novos administradores." });
+        }
+
         public async Task<IEnumerable<IdentityError>> RegisterAsync(CreateAccountRequestDto dto)
         {
             var errors = new List<IdentityError>();
@@ -97,6 +109,9 @@ namespace FamilyVaultApi.Services.Service
 
             if (dto.Password != dto.PasswordConfirm)
                 errors.Add(new IdentityError { Code = "PasswordMismatch", Description = "As senhas não conferem." });
+
+            if (ctx.IsAdmin)
+                await ValidateAdminRegistrationAllowedAsync(errors);
 
             if (errors.Any())
                 return errors;
