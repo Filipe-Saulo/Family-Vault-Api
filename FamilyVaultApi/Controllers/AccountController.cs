@@ -1,4 +1,4 @@
-﻿using FamilyVaultApi.Common;
+using FamilyVaultApi.Common;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
 using FamilyVaultApi.Models.Dto.Responses.Account;
@@ -35,36 +35,28 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<string>.Ok(null, "Usuário registrado com sucesso."));
         }
 
-        [HttpPost("login")]
-        public async Task<ActionResult<ApiResponse<AuthResponseDto>>> Login([FromBody] LoginRequestDto loginDto)
+        [HttpPost("web/login")]
+        public async Task<ActionResult<ApiResponse<AuthResponseDto>>> LoginWeb([FromBody] LoginRequestDto loginDto)
         {
             var authResponse = await _accountService.LoginAsync(loginDto);
-            
-            if (!string.IsNullOrEmpty(loginDto.Email))
-            {
-                Response.Cookies.Append(
-                "refreshToken",
-                authResponse.RefreshToken,
-                new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.None,
-                }
-                );
+            SetRefreshTokenCookie(authResponse.RefreshToken);
 
-
-                return Ok(ApiResponse<AuthResponseDto>.Ok(
+            return Ok(ApiResponse<AuthResponseDto>.Ok(
                 new AuthResponseDto
                 {
                     UserId = authResponse.UserId,
                     Token = authResponse.Token,
                     RefreshToken = null
                 },
-                "Administrador logado com sucesso."
-                ));
-            }            
-            return Ok(ApiResponse<AuthResponseDto>.Ok(authResponse, "Usuário logado com sucesso."));
+                "Login realizado com sucesso."
+            ));
+        }
+
+        [HttpPost("app/login")]
+        public async Task<ActionResult<ApiResponse<AuthResponseDto>>> LoginApp([FromBody] LoginRequestDto loginDto)
+        {
+            var authResponse = await _accountService.LoginAsync(loginDto);
+            return Ok(ApiResponse<AuthResponseDto>.Ok(authResponse, "Login realizado com sucesso."));
         }
 
         [HttpPost("logout")]
@@ -74,14 +66,17 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<object>.Ok(null, "Logout realizado com sucesso."));
         }
 
-        [HttpPost("refreshtoken")]
-        public async Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshToken([FromBody] RefreshTokenRequestDto? request)
-        {
-            string? refreshToken;
-            bool isWeb = Request.Headers["User-Agent"].ToString().Contains("Mozilla");
+        [HttpPost("web/refreshtoken")]
+        public Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenWeb([FromBody] RefreshTokenRequestDto? request)
+            => RefreshTokenInternal(request, isWeb: true);
 
-            // Obtém o refresh token — cookie no web, body no app
-            refreshToken = isWeb
+        [HttpPost("app/refreshtoken")]
+        public Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenApp([FromBody] RefreshTokenRequestDto? request)
+            => RefreshTokenInternal(request, isWeb: false);
+
+        private async Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenInternal(RefreshTokenRequestDto? request, bool isWeb)
+        {
+            var refreshToken = isWeb
                 ? Request.Cookies["refreshToken"]
                 : request?.RefreshToken;
 
@@ -92,15 +87,11 @@ namespace FamilyVaultApi.Controllers
             if (string.IsNullOrEmpty(accessToken) || accessToken == "null")
                 throw new BadRequestException("Token inválido.");
 
-            // Revalida tokens
-            var result = await _accountService.RefreshTokenAsync(
-                new RefreshTokenRequestDto
-                {
-                    Token = accessToken,
-                    RefreshToken = refreshToken
-                },
-                isWeb
-            );
+            var result = await _accountService.RefreshTokenAsync(new RefreshTokenRequestDto
+            {
+                Token = accessToken,
+                RefreshToken = refreshToken
+            });
 
             var responseDto = new AuthResponseDto
             {
@@ -109,33 +100,28 @@ namespace FamilyVaultApi.Controllers
             };
 
             if (isWeb)
-            {
-                // Web → grava cookie
-                Response.Cookies.Append(
-                    "refreshToken",
-                    result.RefreshToken,
-                    new CookieOptions
-                    {
-                        HttpOnly = true,
-                        Secure = true,
-                        SameSite = SameSiteMode.None,                        
-                    }
-                );
-            }
+                SetRefreshTokenCookie(result.RefreshToken);
             else
-            {
-                // Mobile → retorna no body
                 responseDto.RefreshToken = result.RefreshToken;
-            }
 
             return Ok(ApiResponse<AuthResponseDto>.Ok(responseDto));
         }
-    
+
         [HttpPost("resetPassword")]
         public async Task<ActionResult<ApiResponse<object>>> ResetPassword([FromBody] PasswordResetRequestDto passwordResetDto)
         {
             await _accountService.ResetPasswordAsync(passwordResetDto, User);
             return Ok(ApiResponse<object>.Ok(null, "Senha alterada com sucesso"));
+        }
+
+        private void SetRefreshTokenCookie(string token)
+        {
+            Response.Cookies.Append("refreshToken", token, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.None,
+            });
         }
     }
 }

@@ -146,35 +146,21 @@ namespace FamilyVaultApi.Services.Service
             };
         }
 
-        public async Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request, bool isWeb)
+        public async Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request)
         {
             var handler = new JwtSecurityTokenHandler();
             var tokenContent = handler.ReadJwtToken(request.Token);
 
-            var userId = tokenContent.Claims.FirstOrDefault(c => c.Type == "uid")?.Value
-                ?? throw new SecurityTokenException("Token sem identificador de usuário");
+            var userId = tokenContent.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
+            if (string.IsNullOrEmpty(userId))
+                throw new SecurityTokenException("Token sem identificador de usuário");
 
-            string userName;
-
-            if (isWeb)
-            {
-                userName = tokenContent.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Email)?.Value;
-                if (string.IsNullOrEmpty(userName))
-                    throw new SecurityTokenException("Token sem email");
-            }
-            else
-            {
-                userName = tokenContent.Claims.FirstOrDefault(c => c.Type == "phone_number")?.Value;
-                if (string.IsNullOrEmpty(userName))
-                    throw new SecurityTokenException("Token sem phone_number");
-            }
             return await _repository.RefreshTokenAsync(request);
         }
 
         public async Task LogoutAsync(string? token = null)
         {
             var context = _httpContextAccessor.HttpContext;
-            bool isWeb = context?.Request.Headers["User-Agent"].ToString().Contains("Mozilla") ?? false;
 
             string? userId = null;
             
@@ -194,16 +180,13 @@ namespace FamilyVaultApi.Services.Service
                 throw new UnauthorizedAccessException("Token inválido ou ausente.");
             
             await _repository.LogoutAsync(userId);
-            
-            if (isWeb)
+
+            context?.Response.Cookies.Delete("refreshToken", new CookieOptions
             {
-                context.Response.Cookies.Delete("refreshToken", new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.None
-                });
-            }
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.None
+            });
         }
 
         public async Task ResetPasswordAsync(PasswordResetRequestDto dto, ClaimsPrincipal userClaims)
