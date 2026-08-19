@@ -71,7 +71,7 @@ namespace FamilyVaultApi.Controllers
         public async Task<IActionResult> Logout([FromBody] LogoutRequestDto? request = null)
         {
             await _accountService.LogoutAsync(request?.Token);
-            return Ok(ApiResponse<object>.Ok("Logout realizado com sucesso."));
+            return Ok(ApiResponse<object>.Ok(null, "Logout realizado com sucesso."));
         }
 
         [HttpPost("refreshtoken")]

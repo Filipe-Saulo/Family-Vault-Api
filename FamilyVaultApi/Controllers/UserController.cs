@@ -34,7 +34,7 @@ namespace FamilyVaultApi.Controllers
         public async Task<ActionResult<ApiResponse<object>>> DeleteUser([FromRoute] string id)
         {
             await _userService.DeleteUserAsync(id, User);
-            return Ok(ApiResponse<object>.Ok("Usuário excluído com sucesso"));
+            return Ok(ApiResponse<object>.Ok(null, "Usuário excluído com sucesso"));
         }
 
         [HttpPost("{userId}/permissions")]
