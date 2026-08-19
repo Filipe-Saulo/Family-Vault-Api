@@ -96,6 +96,20 @@ namespace FamilyVaultApi.Repositories.Repository
             await _context.SaveChangesAsync();
         }
 
+        public async Task<List<PermissionCode>> GetPermissionsAsync(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                throw new NotFoundException("Usuário", userId);
+
+            var claims = await _userManager.GetClaimsAsync(user);
+
+            return claims
+                .Where(c => c.Type == AppClaimTypes.Permission)
+                .Select(c => Enum.Parse<PermissionCode>(c.Value))
+                .ToList();
+        }
+
         public async Task GrantPermissionAsync(string userId, PermissionCode permission)
         {
             var user = await _userManager.FindByIdAsync(userId);

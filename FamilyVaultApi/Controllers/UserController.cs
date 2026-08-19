@@ -45,6 +45,14 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<object>.Ok(null, "Usuário excluído com sucesso"));
         }
 
+        [HttpGet("{userId}/permissions")]
+        [Authorize(Roles = "Administrator")]
+        public async Task<ActionResult<ApiResponse<List<PermissionCode>>>> GetPermissions([FromRoute] string userId)
+        {
+            var result = await _userService.GetPermissionsAsync(userId);
+            return Ok(ApiResponse<List<PermissionCode>>.Ok(result));
+        }
+
         [HttpPost("{userId}/permissions")]
         [Authorize(Roles = "Administrator")]
         public async Task<ActionResult<ApiResponse<object>>> GrantPermission([FromRoute] string userId, [FromBody] GrantPermissionDto dto)

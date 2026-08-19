@@ -61,6 +61,11 @@ namespace FamilyVaultApi.Services.Service
             await _userRepository.DeleteAsync(userId);
         }
 
+        public async Task<List<PermissionCode>> GetPermissionsAsync(string userId)
+        {
+            return await _userRepository.GetPermissionsAsync(userId);
+        }
+
         public async Task GrantPermissionAsync(string userId, PermissionCode permission)
         {
             await _userRepository.GrantPermissionAsync(userId, permission);
