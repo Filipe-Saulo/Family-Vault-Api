@@ -1,6 +1,7 @@
 ﻿using FamilyVaultApi.Models.Dto.Requests.User;
 using FamilyVaultApi.Models.Dto.Responses.User;
 using FamilyVaultApi.Models.Internal;
+using FamilyVaultApi.Models.Internal.Enums;
 
 namespace FamilyVaultApi.Repositories.IRepository
 {
@@ -8,5 +9,7 @@ namespace FamilyVaultApi.Repositories.IRepository
     {
         Task<PagedResult<UserResponseDto>> GetAllUsersAsync(UserQueryRequestDto query);
         Task DeleteAsync(string userId);
+        Task GrantPermissionAsync(string userId, PermissionCode permission);
+        Task RevokePermissionAsync(string userId, PermissionCode permission);
     }
 }

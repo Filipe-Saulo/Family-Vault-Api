@@ -1,8 +1,10 @@
 using Asp.Versioning;
+using FamilyVaultApi.Common;
 using FamilyVaultApi.Data;
 using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Mapping;
 using FamilyVaultApi.Middleware;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Repositories.Repository;
 using FamilyVaultApi.Services.IService;
@@ -177,6 +179,14 @@ builder.Services.AddAuthentication(options =>
             }
         };
     });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(nameof(PermissionCode.ManageCategories), p => p.RequireClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageCategories)));
+    options.AddPolicy(nameof(PermissionCode.ManageTransactionTypes), p => p.RequireClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageTransactionTypes)));
+    options.AddPolicy(nameof(PermissionCode.ManageTransactions), p => p.RequireClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageTransactions)));
+    options.AddPolicy(nameof(PermissionCode.ManageUsers), p => p.RequireClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageUsers)));
+});
 
 builder.Services.AddResponseCaching(options =>
 {

@@ -22,15 +22,17 @@ namespace FamilyVaultApi.Repositories.Repository
         private readonly IConfiguration _configuration;
         private readonly DatabaseContext _context;
         private readonly UserManager<User> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
 
         private readonly string _loginProvider = TokenOptions.DefaultProvider;
         private readonly string _refreshTokenPurpose = "RefreshToken";
 
-        public AccountRepository(UserManager<User> userManager, IConfiguration configuration, DatabaseContext context)
+        public AccountRepository(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration, DatabaseContext context)
         {
             _context = context;
             _configuration = configuration;
             _userManager = userManager;
+            _roleManager = roleManager;
         }
 
         public async Task<AuthResult> Login(LoginRequestDto loginDto)
@@ -114,6 +116,10 @@ namespace FamilyVaultApi.Repositories.Repository
             if (isAdmin) roleClaims.Add(new Claim(ClaimTypes.Role, "Administrator"));
             if (isUser) roleClaims.Add(new Claim(ClaimTypes.Role, "User"));
 
+            var permissionClaims = new List<Claim>();
+            if (isAdmin) permissionClaims.AddRange(await _roleManager.GetClaimsAsync(await _roleManager.FindByNameAsync("Administrator")));
+            if (isUser) permissionClaims.AddRange(await _roleManager.GetClaimsAsync(await _roleManager.FindByNameAsync("User")));
+
 
             var claims = new List<Claim>
             {
@@ -124,7 +130,8 @@ namespace FamilyVaultApi.Repositories.Repository
             new Claim("SecurityStamp", user.SecurityStamp)
             }
             .Union(userClaims)
-            .Union(roleClaims);
+            .Union(roleClaims)
+            .Union(permissionClaims);
 
 
             var token = new JwtSecurityToken(

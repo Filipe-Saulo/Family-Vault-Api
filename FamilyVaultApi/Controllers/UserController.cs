@@ -1,5 +1,6 @@
 ﻿using FamilyVaultApi.Common;
 using FamilyVaultApi.Models.Internal;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Services.IService;
 using FamilyVaultApi.Models.Dto.Responses.User;
 using Microsoft.AspNetCore.Authorization;
@@ -21,7 +22,7 @@ namespace FamilyVaultApi.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Administrator")]
+        [Authorize(Policy = nameof(PermissionCode.ManageUsers))]
         public async Task<ActionResult<ApiResponse<PagedResult<UserResponseDto>>>> GetUsers([FromQuery] UserQueryRequestDto query)
         {
             var result = await _userService.GetUsersAsync(query);
@@ -35,5 +36,21 @@ namespace FamilyVaultApi.Controllers
             await _userService.DeleteUserAsync(id, User);
             return Ok(ApiResponse<object>.Ok("Usuário excluído com sucesso"));
         }
-    }   
+
+        [HttpPost("{userId}/permissions")]
+        [Authorize(Roles = "Administrator")]
+        public async Task<ActionResult<ApiResponse<object>>> GrantPermission([FromRoute] string userId, [FromBody] GrantPermissionDto dto)
+        {
+            await _userService.GrantPermissionAsync(userId, dto.Permission);
+            return Ok(ApiResponse<object>.Ok(null, "Permissão concedida"));
+        }
+
+        [HttpDelete("{userId}/permissions/{permission}")]
+        [Authorize(Roles = "Administrator")]
+        public async Task<ActionResult<ApiResponse<object>>> RevokePermission([FromRoute] string userId, [FromRoute] PermissionCode permission)
+        {
+            await _userService.RevokePermissionAsync(userId, permission);
+            return Ok(ApiResponse<object>.Ok(null, "Permissão revogada"));
+        }
+    }
 }

@@ -2,6 +2,7 @@
 using FamilyVaultApi.Models.Dto.Requests.Transaction;
 using FamilyVaultApi.Models.Dto.Responses.TransactionResponse;
 using FamilyVaultApi.Models.Internal;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,7 +38,7 @@ namespace FamilyVaultApi.Controllers
         }
 
         [HttpDelete("{id:int}")]
-        [Authorize(Roles = "Administrator")]
+        [Authorize(Policy = nameof(PermissionCode.ManageTransactions))]
         public async Task<ActionResult<ApiResponse<object>>> Delete(int id)
         {
             await _transactionService.DeleteAsync(id);

@@ -1,12 +1,17 @@
 ﻿using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using FamilyVaultApi.Common;
 using FamilyVaultApi.Data;
 using FamilyVaultApi.Data.Entities;
+using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.User;
 using FamilyVaultApi.Models.Dto.Responses.User;
 using FamilyVaultApi.Models.Internal;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace FamilyVaultApi.Repositories.Repository
 {
@@ -15,11 +20,13 @@ namespace FamilyVaultApi.Repositories.Repository
 
         private readonly IMapper _mapper;
         private readonly DatabaseContext _context;
+        private readonly UserManager<User> _userManager;
 
-        public UserRepository(IMapper mapper, DatabaseContext context)
+        public UserRepository(IMapper mapper, DatabaseContext context, UserManager<User> userManager)
         {
             _mapper = mapper;
             _context = context;
+            _userManager = userManager;
         }
 
 
@@ -70,6 +77,37 @@ namespace FamilyVaultApi.Repositories.Repository
 
             _context.Users.Remove(entity);
             await _context.SaveChangesAsync();
+        }
+
+        public async Task GrantPermissionAsync(string userId, PermissionCode permission)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                throw new NotFoundException("Usuário", userId);
+
+            var existingClaims = await _userManager.GetClaimsAsync(user);
+            var permissionValue = permission.ToString();
+
+            if (existingClaims.Any(c => c.Type == AppClaimTypes.Permission && c.Value == permissionValue))
+                throw new BadRequestException($"O usuário já possui a permissão '{permissionValue}'.");
+
+            await _userManager.AddClaimAsync(user, new Claim(AppClaimTypes.Permission, permissionValue));
+        }
+
+        public async Task RevokePermissionAsync(string userId, PermissionCode permission)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                throw new NotFoundException("Usuário", userId);
+
+            var permissionValue = permission.ToString();
+            var existingClaims = await _userManager.GetClaimsAsync(user);
+            var claim = existingClaims.FirstOrDefault(c => c.Type == AppClaimTypes.Permission && c.Value == permissionValue);
+
+            if (claim == null)
+                throw new NotFoundException("Permissão", permissionValue);
+
+            await _userManager.RemoveClaimAsync(user, claim);
         }
     }
 }

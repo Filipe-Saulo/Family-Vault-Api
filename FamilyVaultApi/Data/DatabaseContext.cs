@@ -1,5 +1,7 @@
-﻿using FamilyVaultApi.Data.Configurations;
+﻿using FamilyVaultApi.Common;
+using FamilyVaultApi.Data.Configurations;
 using FamilyVaultApi.Data.Entities;
+using FamilyVaultApi.Models.Internal.Enums;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -137,6 +139,15 @@ namespace FamilyVaultApi.Data
                     CategoryPurposeId = 3, // both
                     CreatedAt = DateTime.UtcNow
                 }
+            );
+
+            // Seed Administrator role permission claims
+            const string administratorRoleId = "5d92e12f-f00c-4899-ac98-89ea76712171";
+            modelBuilder.Entity<IdentityRoleClaim<string>>().HasData(
+                new IdentityRoleClaim<string> { Id = 1, RoleId = administratorRoleId, ClaimType = AppClaimTypes.Permission, ClaimValue = nameof(PermissionCode.ManageCategories) },
+                new IdentityRoleClaim<string> { Id = 2, RoleId = administratorRoleId, ClaimType = AppClaimTypes.Permission, ClaimValue = nameof(PermissionCode.ManageTransactionTypes) },
+                new IdentityRoleClaim<string> { Id = 3, RoleId = administratorRoleId, ClaimType = AppClaimTypes.Permission, ClaimValue = nameof(PermissionCode.ManageTransactions) },
+                new IdentityRoleClaim<string> { Id = 4, RoleId = administratorRoleId, ClaimType = AppClaimTypes.Permission, ClaimValue = nameof(PermissionCode.ManageUsers) }
             );
         }
     }

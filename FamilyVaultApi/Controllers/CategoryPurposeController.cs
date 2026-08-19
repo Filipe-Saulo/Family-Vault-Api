@@ -1,6 +1,7 @@
 using FamilyVaultApi.Common;
 using FamilyVaultApi.Models.Dto.Requests.CategoryPurpose;
 using FamilyVaultApi.Models.Dto.Responses.CategoryPurpose;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,7 +20,7 @@ namespace FamilyVaultApi.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Administrator")]
+        [Authorize(Policy = nameof(PermissionCode.ManageCategories))]
         public async Task<ActionResult<ApiResponse<CategoryPurposeResponseDto>>> Post([FromBody] CreateCategoryPurposeDto dto)
         {
             var result = await _categoryPurposeService.CreateAsync(dto);
@@ -36,7 +37,7 @@ namespace FamilyVaultApi.Controllers
         }
 
         [HttpPut("{id:int}")]
-        [Authorize(Roles = "Administrator")]
+        [Authorize(Policy = nameof(PermissionCode.ManageCategories))]
         public async Task<ActionResult<ApiResponse<CategoryPurposeResponseDto>>> Put(int id, [FromBody] UpdateCategoryPurposeDto dto)
         {
             var result = await _categoryPurposeService.UpdateAsync(id, dto);

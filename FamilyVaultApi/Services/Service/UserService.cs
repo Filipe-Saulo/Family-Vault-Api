@@ -2,6 +2,7 @@
 using FamilyVaultApi.Models.Dto.Requests.User;
 using FamilyVaultApi.Models.Dto.Responses.User;
 using FamilyVaultApi.Models.Internal;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.IService;
 using System.Security;
@@ -41,6 +42,16 @@ namespace FamilyVaultApi.Services.Service
                 throw new SecurityException("Você não tem permissão para acessar este recurso.");
 
             await _userRepository.DeleteAsync(userId);
+        }
+
+        public async Task GrantPermissionAsync(string userId, PermissionCode permission)
+        {
+            await _userRepository.GrantPermissionAsync(userId, permission);
+        }
+
+        public async Task RevokePermissionAsync(string userId, PermissionCode permission)
+        {
+            await _userRepository.RevokePermissionAsync(userId, permission);
         }
 
     }
