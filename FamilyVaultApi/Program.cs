@@ -146,6 +146,9 @@ builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 //transaction type
 builder.Services.AddScoped<ITransactionTypeService, TransactionTypeService>();
 builder.Services.AddScoped<ITransactionTypeRepository, TransactionTypeRepository>();
+//dashboard
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 
 builder.Services.AddAuthentication(options =>
 {    
