@@ -12,6 +12,7 @@ using FamilyVaultApi.Services.IService;
 using FamilyVaultApi.Services.Service;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -198,10 +199,27 @@ builder.Services.AddResponseCaching(options =>
     options.UseCaseSensitivePaths = true;
 });
 
-builder.Services.AddControllers().AddOData(options =>
-{
-    options.Select().Filter().OrderBy();
-});
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(kvp => kvp.Value?.Errors.Count > 0)
+                .SelectMany(kvp => kvp.Value!.Errors.Select(e => e.ErrorMessage));
+
+            var response = new ApiResponse<object>(string.Join(" | ", errors))
+            {
+                TraceId = context.HttpContext.TraceIdentifier
+            };
+
+            return new BadRequestObjectResult(response);
+        };
+    })
+    .AddOData(options =>
+    {
+        options.Select().Filter().OrderBy();
+    });
 
 builder.Services.AddHealthChecks()
     .AddMySql(connectionString, name: "mysql");
