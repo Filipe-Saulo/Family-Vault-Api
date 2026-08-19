@@ -81,6 +81,27 @@ namespace FamilyVaultApi.Repositories.Repository
         }
 
 
+        public async Task<CategoryResponseDto> UpdateAsync(int id, UpdateCategoryDto dto)
+        {
+            var entity = await _context.Categories.FindAsync(id);
+            if (entity == null)
+                throw new NotFoundException("Category", id);
+
+            var purposeExists = await _context.CategoryPurposes
+                .AnyAsync(x => x.CategoryPurposeId == dto.CategoryPurposeId);
+
+            if (!purposeExists)
+                throw new NotFoundException("CategoryPurpose não encontrado", dto.CategoryPurposeId);
+
+            entity.Description = dto.Description;
+            entity.CategoryPurposeId = dto.CategoryPurposeId;
+            entity.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return _mapper.Map<CategoryResponseDto>(entity);
+        }
+
         public async Task DeleteAsync(int id)
         {
             var entity = await _context.Categories.FindAsync(id);

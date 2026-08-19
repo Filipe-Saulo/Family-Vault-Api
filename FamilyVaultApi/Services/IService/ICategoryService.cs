@@ -8,6 +8,7 @@ namespace FamilyVaultApi.Services.IService
     {
         Task<CategoryResponseDto> CreateAsync(CreateCategoryDto dto);
         Task<PagedResult<CategoryResponseDto>> GetAllAsync(CategoryQueryRequestDto query);
+        Task<CategoryResponseDto> UpdateAsync(int id, UpdateCategoryDto dto);
         Task DeleteAsync(int id);
     }
 }

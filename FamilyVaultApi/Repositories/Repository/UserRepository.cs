@@ -68,6 +68,23 @@ namespace FamilyVaultApi.Repositories.Repository
         }
 
 
+        public async Task<UserResponseDto> UpdateAsync(string userId, UpdateUserDto dto)
+        {
+            var entity = await _context.Users.FindAsync(userId);
+            if (entity == null)
+                throw new NotFoundException("Usuário", userId);
+
+            entity.FirstName = dto.FirstName;
+            entity.LastName = dto.LastName;
+            entity.FullName = $"{dto.FirstName} {dto.LastName}";
+            entity.Age = dto.Age;
+            entity.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return _mapper.Map<UserResponseDto>(entity);
+        }
+
         public async Task DeleteAsync(string userId)
         {
             var entity = await _context.Users.FindAsync(userId);

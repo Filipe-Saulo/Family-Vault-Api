@@ -84,6 +84,30 @@ namespace FamilyVaultApi.Repositories.Repository
             };
         }
 
+        public async Task<TransactionResponseDto> UpdateAsync(int id, UpdateTransactionDto dto)
+        {
+            var entity = await _context.Transactions.FindAsync(id);
+            if (entity == null)
+                throw new NotFoundException("Transaction", id);
+
+            if (!await _context.Categories.AnyAsync(x => x.CategoryId == dto.CategoryId))
+                throw new NotFoundException("Category não encontrada", dto.CategoryId);
+
+            if (!await _context.TransactionTypes.AnyAsync(x => x.TransactionTypeId == dto.TransactionTypeId))
+                throw new NotFoundException("TransactionType não encontrado", dto.TransactionTypeId);
+
+            entity.CategoryId = dto.CategoryId;
+            entity.TransactionTypeId = dto.TransactionTypeId;
+            entity.Description = dto.Description;
+            entity.Amount = dto.Amount;
+            entity.TransactionDate = dto.TransactionDate;
+            entity.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return _mapper.Map<TransactionResponseDto>(entity);
+        }
+
         public async Task DeleteAsync(int id)
         {
             var entity = await _context.Transactions.FindAsync(id);

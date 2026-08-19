@@ -30,11 +30,28 @@ namespace FamilyVaultApi.Services.Service
             return await _userRepository.GetAllUsersAsync(query);
         }
 
+        public async Task<UserResponseDto> UpdateUserAsync(string userId, UpdateUserDto dto, ClaimsPrincipal userClaims)
+        {
+            if (dto == null)
+                throw new ArgumentNullException(nameof(dto));
+
+            if (userClaims == null || !userClaims.Identity.IsAuthenticated)
+                throw new UnauthorizedAccessException("Usuário não autenticado.");
+
+            var currentUserId = userClaims.FindFirst("uid")?.Value;
+            var isAdmin = userClaims.IsInRole("Administrator");
+
+            if (!isAdmin && currentUserId != userId)
+                throw new SecurityException("Você não tem permissão para acessar este recurso.");
+
+            return await _userRepository.UpdateAsync(userId, dto);
+        }
+
         public async Task DeleteUserAsync(string userId, ClaimsPrincipal userClaims)
         {
             if (userClaims == null || !userClaims.Identity.IsAuthenticated)
                 throw new UnauthorizedAccessException("Usuário não autenticado.");
-            
+
             var currentUserId = userClaims.FindFirst("uid")?.Value;
             var isAdmin = userClaims.IsInRole("Administrator");
 

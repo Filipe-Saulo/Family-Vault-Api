@@ -37,6 +37,14 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<PagedResult<TransactionResponseDto>>.Ok(result));
         }
 
+        [HttpPut("{id:int}")]
+        [Authorize(Policy = nameof(PermissionCode.ManageTransactions))]
+        public async Task<ActionResult<ApiResponse<TransactionResponseDto>>> Put(int id, [FromBody] UpdateTransactionDto dto)
+        {
+            var result = await _transactionService.UpdateAsync(id, dto);
+            return Ok(ApiResponse<TransactionResponseDto>.Ok(result, "Transação atualizada"));
+        }
+
         [HttpDelete("{id:int}")]
         [Authorize(Policy = nameof(PermissionCode.ManageTransactions))]
         public async Task<ActionResult<ApiResponse<object>>> Delete(int id)

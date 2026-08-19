@@ -37,6 +37,14 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<PagedResult<CategoryResponseDto>>.Ok(result));
         }
 
+        [HttpPut("{id:int}")]
+        [Authorize(Policy = nameof(PermissionCode.ManageCategories))]
+        public async Task<ActionResult<ApiResponse<CategoryResponseDto>>> Put(int id, [FromBody] UpdateCategoryDto dto)
+        {
+            var result = await _categoryService.UpdateAsync(id, dto);
+            return Ok(ApiResponse<CategoryResponseDto>.Ok(result, "Categoria atualizada"));
+        }
+
         [HttpDelete("{id:int}")]
         [Authorize(Policy = nameof(PermissionCode.ManageCategories))]
         public async Task<ActionResult<ApiResponse<object>>> Delete(int id)

@@ -42,6 +42,14 @@ namespace FamilyVaultApi.Services.Service
             return await _repository.GetAllAsync(query);
         }
 
+        public async Task<TransactionResponseDto> UpdateAsync(int id, UpdateTransactionDto dto)
+        {
+            if (dto == null)
+                throw new ArgumentNullException(nameof(dto));
+
+            return await _repository.UpdateAsync(id, dto);
+        }
+
         public async Task DeleteAsync(int id)
         {
             await _repository.DeleteAsync(id);
