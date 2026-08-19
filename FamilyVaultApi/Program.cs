@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using AspNetCoreRateLimit;
 using FamilyVaultApi.Common;
 using FamilyVaultApi.Data;
 using FamilyVaultApi.Data.Entities;
@@ -205,7 +206,14 @@ builder.Services.AddControllers().AddOData(options =>
 builder.Services.AddHealthChecks()
     .AddMySql(connectionString, name: "mysql");
 
+builder.Services.AddMemoryCache();
+builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
+builder.Services.AddInMemoryRateLimiting();
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+
 var app = builder.Build();
+
+app.UseIpRateLimiting();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

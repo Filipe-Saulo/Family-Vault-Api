@@ -16,6 +16,7 @@ Supports **web and mobile clients**.
 - Swagger / OpenAPI documentation
 - Response caching
 - Health check for MySQL at `/health`
+- Rate limiting on auth endpoints (login, register, reset password, refresh token)
 - Multi-platform: web apps and mobile apps
 
 ## Requirements
