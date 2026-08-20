@@ -16,11 +16,14 @@ dotnet run --project FamilyVaultApi
 dotnet ef migrations add <MigrationName>
 dotnet ef database update
 dotnet ef database drop
+
+# Unit tests
+dotnet test FamilyVaultApi.UnitTests
 ```
 
 Swagger UI is available at `http://localhost:5090/swagger` or `https://localhost:7072/swagger` when running.
 
-There is no test project in this solution (`Family-Vault-Api.sln` contains only `FamilyVaultApi.csproj`).
+`Family-Vault-Api.sln` has two projects: `FamilyVaultApi` (the API) and `FamilyVaultApi.UnitTests` (xUnit + Moq + FluentAssertions + Bogus, `net8.0`, `ProjectReference` to the main project). Tests live under `Services/` (one file per `Services/Service/*.cs` class), with mocks built per-test-class in the constructor (no shared fixtures) and fluent request builders in `Builders/<Entity>/` (`XxxDtoBuilder.New().With...().Build()`, defaults generated via `Bogus.Faker` rather than fixed constants). Naming convention: `MethodName_Scenario_ExpectedResult`. Only the Service layer has coverage — Controllers and Repositories do not.
 
 ## Architecture
 
