@@ -52,6 +52,8 @@ Financial management app with two user roles:
 
 Core entities: `User` (extends `IdentityUser`) → `Transaction` → `Category` → `CategoryPurpose`. Lookup tables `TransactionType` and `CategoryPurpose`, plus initial `Category` rows, are seeded in the initial migration.
 
+`DashboardController` (`GET /api/dashboard/summary`) aggregates transaction totals per `Category`/`TransactionType` for a date range; results are scoped to the caller's own data when the caller is a `User`, and unscoped for `Administrator`.
+
 EF Core table naming is mixed: Identity/user tables use a `tb_` prefix (`tb_user`, `tb_roles`, `tb_user_roles`, `tb_user_claims`, `tb_user_logins`, `tb_user_tokens`, `tb_role_claims`, configured in `Data/DatabaseContext.cs`), while domain entity tables use plain plural snake_case with **no** prefix (`categories`, `category_purposes`, `transactions`, `transaction_types`, configured via Fluent API in `Data/Configurations/`).
 
 ## Authentication
@@ -59,8 +61,7 @@ EF Core table naming is mixed: Identity/user tables use a `tb_` prefix (`tb_user
 JWT Bearer tokens (10-minute expiry, `JwtSettings:DurationInMinutes`) + refresh tokens backed by ASP.NET Core Identity token provider (database-stored).
 
 - JWT claims: `uid` (user ID), `email` or `phone_number` (whichever the user registered with), `SecurityStamp`, role claims, and permission claims (`AppClaimTypes.Permission`) pulled from the user's role via `RoleManager.GetClaimsAsync`.
-- Web clients: refresh token is set as an `HttpOnly` cookie. Mobile clients: refresh token is returned in the response body.
-- The web-vs-mobile check is inconsistent between endpoints: `AccountController.Login` decides by whether `loginDto.Email` is set (email login → cookie, refresh token stripped from body), while `AccountController.RefreshToken` decides by checking whether the `User-Agent` header contains `"Mozilla"`. Keep this in mind when touching refresh-token flows.
+- Web vs. mobile is selected by route, not by inspecting the request: `AccountController` exposes separate `web/login` + `web/refreshtoken` (refresh token set as an `HttpOnly` cookie, stripped from the response body) and `app/login` + `app/refreshtoken` (refresh token returned in the response body) endpoints. `LoginAsync` separately infers Administrator-vs-User login by which of `loginDto.Email`/`loginDto.Phone` is populated (exactly one must be set) — that check is about credential type, not client platform.
 
 Token generation logic is in `Repositories/Repository/AccountRepository.cs`. Note: the JWT Bearer `OnChallenge` handler in `Program.cs` overrides the default response to return a `401` with a custom JSON body (`{"message":"Acesso negado."}`) for any missing/invalid token.
 
@@ -83,4 +84,6 @@ Nullable reference types are enabled project-wide. Implicit usings are on — no
 
 ## Notes on README.md
 
-The repo has a `README.md` with a full endpoints table (Account, Category, Transaction, User routes with required roles) that's worth checking for route/role reference. Its setup instructions are stale, though: it references a `FamilyVaultDb` database name and port 5001 for Swagger — the actual values are `FamilyVault` and the ports documented above. It also lists Serilog logging, health checks, and rate limiting as features; the related packages are referenced in the `.csproj` but are not actually wired up in `Program.cs` (no `AddHealthChecks()`, no rate-limit middleware, no Serilog sink configuration).
+The repo has a `README.md` with a full endpoints table (Account, Category, Transaction, User, Dashboard routes with required roles) that's worth checking for route/role reference and matches the current controllers. Its setup instructions are stale, though: it references a `FamilyVaultDb` database name and port 5001 for Swagger — the actual values are `FamilyVault` and the ports documented above.
+
+Serilog, health checks, and rate limiting (all listed as README features) **are** wired up in `Program.cs`: `UseSerilog`/`UseSerilogRequestLogging` write to console + a rolling file (`Serilog` section in `appsettings.json`), `AddHealthChecks().AddMySql(...)` backs `GET /health`, and `AddInMemoryRateLimiting`/`UseIpRateLimiting` (AspNetCoreRateLimit, `IpRateLimiting` section) throttles auth endpoints (5-10 req/min on login/register/reset/refresh routes, 429 on breach). Response caching is also configured (`AddResponseCaching`/`UseResponseCaching`, 10s `Cache-Control: public` on all responses). `AddOData()` remains the one genuinely dead registration — see above.
