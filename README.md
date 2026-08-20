@@ -1,5 +1,7 @@
 # Family Vault API
 
+![CI](https://github.com/Filipe-Saulo/Family-Vault-Api/actions/workflows/ci.yml/badge.svg)
+
 **Monolithic .NET 8 API** for managing users, accounts, categories, and transactions.
 Supports **web and mobile clients**.
 
@@ -10,6 +12,7 @@ Supports **web and mobile clients**.
 - ASP.NET Core 8 Web API (monolithic architecture)
 - JWT authentication with ASP.NET Core Identity
 - Role-based authorization (`Administrator`, `User`) plus permission-claim policies (`ManageCategories`, `ManageTransactions`, `ManageTransactionTypes`, `ManageUsers`)
+- Financial dashboard with income/expense totals and a per-category, per-type breakdown
 - Entity Framework Core with MySQL (Pomelo)
 - AutoMapper for DTO mapping
 - Serilog logging (console sink + request logging)
@@ -17,7 +20,12 @@ Supports **web and mobile clients**.
 - Response caching
 - Health check for MySQL at `/health`
 - Rate limiting on auth endpoints (login, register, reset password, refresh token)
+- Automated test suite (xUnit) covering the Service layer, run on every push via CI
 - Multi-platform: web apps and mobile apps
+
+## Architecture
+
+Strict layered architecture: `Controller → Service → Repository → EF Core (MySQL)`. Controllers only translate HTTP ↔ DTOs and delegate; business rules and authorization decisions (role, permission-claim, or resource-ownership checks) live in the Service layer; Repositories only persist/query.
 
 ## Requirements
 
@@ -128,6 +136,18 @@ dotnet run --project FamilyVaultApi
 |---|---|---|
 | GET | `/health` | MySQL connectivity check |
 
+## Tests
+
+The `FamilyVaultApi.UnitTests` project (xUnit + Moq + FluentAssertions + Bogus) covers the Service layer — business rules, authorization decisions (ownership vs. permission-based access), and validation, with all dependencies mocked (no database required to run it).
+
+```bash
+dotnet test FamilyVaultApi.UnitTests
+```
+
+## CI/CD
+
+A GitHub Actions workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds the solution and runs the automated test suite on every push/PR to `main`. This is a deliberately minimal, demonstrative pipeline — since this project isn't deployed anywhere, there's no deploy step; it exists to show a basic automated build+test gate, which in a real-world scenario could be extended with deployment, integration tests against a real database, etc.
+
 ## Technologies
 
 - .NET 8, C#
@@ -136,3 +156,9 @@ dotnet run --project FamilyVaultApi
 - AutoMapper
 - Serilog
 - Swagger / OpenAPI
+- xUnit, Moq, FluentAssertions, Bogus (testing)
+- GitHub Actions (CI)
+
+---
+
+Built by [Filipe Saulo](https://github.com/Filipe-Saulo) as a portfolio project.
