@@ -117,5 +117,13 @@ namespace FamilyVaultApi.Repositories.Repository
             _context.Transactions.Remove(entity);
             await _context.SaveChangesAsync();
         }
+
+        public async Task<string?> GetOwnerUserIdAsync(int transactionId)
+        {
+            return await _context.Transactions
+                .Where(x => x.TransactionId == transactionId)
+                .Select(x => x.UserId)
+                .FirstOrDefaultAsync();
+        }
     }
 }

@@ -10,5 +10,6 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<PagedResult<TransactionResponseDto>> GetAllAsync(TransactionQueryRequestDto query);
         Task<TransactionResponseDto> UpdateAsync(int id, UpdateTransactionDto dto);
         Task DeleteAsync(int id);
+        Task<string?> GetOwnerUserIdAsync(int transactionId);
     }
 }

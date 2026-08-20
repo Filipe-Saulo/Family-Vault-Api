@@ -9,7 +9,7 @@ namespace FamilyVaultApi.Services.IService
     {
         Task<TransactionResponseDto> CreateAsync(CreateTransactionDto dto, ClaimsPrincipal userClaims);
         Task<PagedResult<TransactionResponseDto>> GetAllAsync(TransactionQueryRequestDto query);
-        Task<TransactionResponseDto> UpdateAsync(int id, UpdateTransactionDto dto);
-        Task DeleteAsync(int id);
+        Task<TransactionResponseDto> UpdateAsync(int id, UpdateTransactionDto dto, ClaimsPrincipal userClaims);
+        Task DeleteAsync(int id, ClaimsPrincipal userClaims);
     }
 }

@@ -9,6 +9,7 @@ using FamilyVaultApi.UnitTests.Builders.Transaction;
 using FamilyVaultApi.UnitTests.Helpers;
 using FluentAssertions;
 using Moq;
+using System.Security;
 
 namespace FamilyVaultApi.UnitTests.Services
 {
@@ -27,6 +28,7 @@ namespace FamilyVaultApi.UnitTests.Services
 
             _categoryRepositoryMock.Setup(x => x.GetPurposeCodeAsync(It.IsAny<int>())).ReturnsAsync(CategoryPurposeCode.Expense);
             _transactionTypeRepositoryMock.Setup(x => x.GetCodeAsync(It.IsAny<int>())).ReturnsAsync(TransactionTypeCode.Expense);
+            _repositoryMock.Setup(x => x.GetOwnerUserIdAsync(It.IsAny<int>())).ReturnsAsync("user-1");
 
             _service = new TransactionService(_repositoryMock.Object, _categoryRepositoryMock.Object, _transactionTypeRepositoryMock.Object);
         }
@@ -155,23 +157,24 @@ namespace FamilyVaultApi.UnitTests.Services
         [Fact]
         public async Task UpdateAsync_WhenDtoIsNull_ShouldThrowArgumentNullException()
         {
-            Func<Task> act = () => _service.UpdateAsync(1, null!);
+            Func<Task> act = () => _service.UpdateAsync(1, null!, ClaimsPrincipalTestHelper.CreateAdmin());
 
             await act.Should().ThrowAsync<ArgumentNullException>();
         }
 
         [Fact]
-        public async Task UpdateAsync_WhenDtoIsValid_ShouldReturnRepositoryResult()
+        public async Task UpdateAsync_AsAdmin_ShouldBypassOwnershipAndReturnRepositoryResult()
         {
             var dto = UpdateTransactionDtoBuilder.New().Build();
             var expected = new TransactionResponseDto { TransactionId = 9 };
 
             _repositoryMock.Setup(x => x.UpdateAsync(9, dto)).ReturnsAsync(expected);
 
-            var result = await _service.UpdateAsync(9, dto);
+            var result = await _service.UpdateAsync(9, dto, ClaimsPrincipalTestHelper.CreateAdmin());
 
             result.Should().Be(expected);
             _repositoryMock.Verify(x => x.UpdateAsync(9, dto), Times.Once);
+            _repositoryMock.Verify(x => x.GetOwnerUserIdAsync(It.IsAny<int>()), Times.Never);
         }
 
         [Fact]
@@ -181,20 +184,92 @@ namespace FamilyVaultApi.UnitTests.Services
             _categoryRepositoryMock.Setup(x => x.GetPurposeCodeAsync(1)).ReturnsAsync(CategoryPurposeCode.Income);
             _transactionTypeRepositoryMock.Setup(x => x.GetCodeAsync(2)).ReturnsAsync(TransactionTypeCode.Expense);
 
-            Func<Task> act = () => _service.UpdateAsync(9, dto);
+            Func<Task> act = () => _service.UpdateAsync(9, dto, ClaimsPrincipalTestHelper.CreateAdmin());
 
             await act.Should().ThrowAsync<BadRequestException>();
             _repositoryMock.Verify(x => x.UpdateAsync(It.IsAny<int>(), It.IsAny<UpdateTransactionDto>()), Times.Never);
         }
 
+        [Fact]
+        public async Task UpdateAsync_WhenCallerIsOwner_ShouldSucceed()
+        {
+            var dto = UpdateTransactionDtoBuilder.New().Build();
+            var expected = new TransactionResponseDto { TransactionId = 9 };
+            _repositoryMock.Setup(x => x.GetOwnerUserIdAsync(9)).ReturnsAsync("user-1");
+            _repositoryMock.Setup(x => x.UpdateAsync(9, dto)).ReturnsAsync(expected);
+
+            var result = await _service.UpdateAsync(9, dto, ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            result.Should().Be(expected);
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenCallerIsNotOwnerAndHasNoPermission_ShouldThrowSecurityException()
+        {
+            var dto = UpdateTransactionDtoBuilder.New().Build();
+            _repositoryMock.Setup(x => x.GetOwnerUserIdAsync(9)).ReturnsAsync("other-user");
+
+            Func<Task> act = () => _service.UpdateAsync(9, dto, ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            await act.Should().ThrowAsync<SecurityException>();
+            _repositoryMock.Verify(x => x.UpdateAsync(It.IsAny<int>(), It.IsAny<UpdateTransactionDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenCallerHasManageTransactionsPermission_ShouldBypassOwnership()
+        {
+            var dto = UpdateTransactionDtoBuilder.New().Build();
+            var expected = new TransactionResponseDto { TransactionId = 9 };
+            _repositoryMock.Setup(x => x.GetOwnerUserIdAsync(9)).ReturnsAsync("other-user");
+            _repositoryMock.Setup(x => x.UpdateAsync(9, dto)).ReturnsAsync(expected);
+
+            var result = await _service.UpdateAsync(9, dto, ClaimsPrincipalTestHelper.CreateUserWithPermission("user-1", PermissionCode.ManageTransactions));
+
+            result.Should().Be(expected);
+            _repositoryMock.Verify(x => x.GetOwnerUserIdAsync(It.IsAny<int>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenTransactionNotFoundForNonPrivilegedCaller_ShouldThrowNotFoundException()
+        {
+            var dto = UpdateTransactionDtoBuilder.New().Build();
+            _repositoryMock.Setup(x => x.GetOwnerUserIdAsync(9)).ReturnsAsync((string?)null);
+
+            Func<Task> act = () => _service.UpdateAsync(9, dto, ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            await act.Should().ThrowAsync<NotFoundException>();
+        }
+
         // ── DeleteAsync ──────────────────────────────────────────────────────
 
         [Fact]
-        public async Task DeleteAsync_ShouldDelegateToRepository()
+        public async Task DeleteAsync_AsAdmin_ShouldBypassOwnershipAndDelegateToRepository()
         {
-            await _service.DeleteAsync(3);
+            await _service.DeleteAsync(3, ClaimsPrincipalTestHelper.CreateAdmin());
 
             _repositoryMock.Verify(x => x.DeleteAsync(3), Times.Once);
+            _repositoryMock.Verify(x => x.GetOwnerUserIdAsync(It.IsAny<int>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_WhenCallerIsOwner_ShouldDelegateToRepository()
+        {
+            _repositoryMock.Setup(x => x.GetOwnerUserIdAsync(3)).ReturnsAsync("user-1");
+
+            await _service.DeleteAsync(3, ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            _repositoryMock.Verify(x => x.DeleteAsync(3), Times.Once);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_WhenCallerIsNotOwnerAndHasNoPermission_ShouldThrowSecurityException()
+        {
+            _repositoryMock.Setup(x => x.GetOwnerUserIdAsync(3)).ReturnsAsync("other-user");
+
+            Func<Task> act = () => _service.DeleteAsync(3, ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            await act.Should().ThrowAsync<SecurityException>();
+            _repositoryMock.Verify(x => x.DeleteAsync(It.IsAny<int>()), Times.Never);
         }
     }
 }

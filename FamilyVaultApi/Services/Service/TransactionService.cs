@@ -1,9 +1,12 @@
+using FamilyVaultApi.Common;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Transaction;
 using FamilyVaultApi.Models.Dto.Responses.TransactionResponse;
 using FamilyVaultApi.Models.Internal;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.IService;
+using System.Security;
 using System.Security.Claims;
 
 namespace FamilyVaultApi.Services.Service
@@ -48,19 +51,38 @@ namespace FamilyVaultApi.Services.Service
             return await _repository.GetAllAsync(query);
         }
 
-        public async Task<TransactionResponseDto> UpdateAsync(int id, UpdateTransactionDto dto)
+        public async Task<TransactionResponseDto> UpdateAsync(int id, UpdateTransactionDto dto, ClaimsPrincipal userClaims)
         {
             if (dto == null)
                 throw new ArgumentNullException(nameof(dto));
 
+            await EnsureCanModifyTransactionAsync(id, userClaims);
             await EnsureCategoryAllowsTransactionTypeAsync(dto.CategoryId, dto.TransactionTypeId);
 
             return await _repository.UpdateAsync(id, dto);
         }
 
-        public async Task DeleteAsync(int id)
+        public async Task DeleteAsync(int id, ClaimsPrincipal userClaims)
         {
+            await EnsureCanModifyTransactionAsync(id, userClaims);
             await _repository.DeleteAsync(id);
+        }
+
+        private async Task EnsureCanModifyTransactionAsync(int transactionId, ClaimsPrincipal userClaims)
+        {
+            var isAdmin = userClaims.IsInRole("Administrator");
+            var hasManagePermission = userClaims.HasClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageTransactions));
+
+            if (isAdmin || hasManagePermission)
+                return;
+
+            var ownerUserId = await _repository.GetOwnerUserIdAsync(transactionId);
+            if (ownerUserId == null)
+                throw new NotFoundException("Transaction", transactionId);
+
+            var callerId = userClaims.FindFirst("uid")?.Value;
+            if (callerId != ownerUserId)
+                throw new SecurityException("Você não tem permissão para alterar esta transação.");
         }
 
         private async Task EnsureCategoryAllowsTransactionTypeAsync(int categoryId, int transactionTypeId)

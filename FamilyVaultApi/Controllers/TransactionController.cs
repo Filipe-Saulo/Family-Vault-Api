@@ -2,7 +2,6 @@
 using FamilyVaultApi.Models.Dto.Requests.Transaction;
 using FamilyVaultApi.Models.Dto.Responses.TransactionResponse;
 using FamilyVaultApi.Models.Internal;
-using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -38,18 +37,18 @@ namespace FamilyVaultApi.Controllers
         }
 
         [HttpPut("{id:int}")]
-        [Authorize(Policy = nameof(PermissionCode.ManageTransactions))]
+        [Authorize(Roles = "Administrator,User")]
         public async Task<ActionResult<ApiResponse<TransactionResponseDto>>> Put(int id, [FromBody] UpdateTransactionDto dto)
         {
-            var result = await _transactionService.UpdateAsync(id, dto);
+            var result = await _transactionService.UpdateAsync(id, dto, User);
             return Ok(ApiResponse<TransactionResponseDto>.Ok(result, "Transação atualizada"));
         }
 
         [HttpDelete("{id:int}")]
-        [Authorize(Policy = nameof(PermissionCode.ManageTransactions))]
+        [Authorize(Roles = "Administrator,User")]
         public async Task<ActionResult<ApiResponse<object>>> Delete(int id)
         {
-            await _transactionService.DeleteAsync(id);
+            await _transactionService.DeleteAsync(id, User);
             return Ok(ApiResponse<object>.Ok(null, "Transação removida"));
         }
     }

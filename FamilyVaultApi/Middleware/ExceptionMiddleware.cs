@@ -1,6 +1,7 @@
 using FamilyVaultApi.Common;
 using FamilyVaultApi.Exceptions;
 using System.Net;
+using System.Security;
 using System.Text.Json;
 
 namespace FamilyVaultApi.Middleware
@@ -48,6 +49,11 @@ namespace FamilyVaultApi.Middleware
             {
                 _logger.LogWarning(ex, "Recurso não encontrado. TraceId={TraceId}", traceId);
                 await HandleExceptionAsync(context, HttpStatusCode.NotFound, ex.Message, traceId);
+            }
+            catch (SecurityException ex)
+            {
+                _logger.LogWarning(ex, "Acesso proibido. TraceId={TraceId}", traceId);
+                await HandleExceptionAsync(context, HttpStatusCode.Forbidden, ex.Message, traceId);
             }
             catch (Exception ex)
             {
