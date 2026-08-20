@@ -2,6 +2,7 @@ using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Transaction;
 using FamilyVaultApi.Models.Dto.Responses.TransactionResponse;
 using FamilyVaultApi.Models.Internal;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.Service;
 using FamilyVaultApi.UnitTests.Builders.Transaction;
@@ -14,12 +15,20 @@ namespace FamilyVaultApi.UnitTests.Services
     public class TransactionServiceTests
     {
         private readonly Mock<ITransactionRepository> _repositoryMock;
+        private readonly Mock<ICategoryRepository> _categoryRepositoryMock;
+        private readonly Mock<ITransactionTypeRepository> _transactionTypeRepositoryMock;
         private readonly TransactionService _service;
 
         public TransactionServiceTests()
         {
             _repositoryMock = new Mock<ITransactionRepository>();
-            _service = new TransactionService(_repositoryMock.Object);
+            _categoryRepositoryMock = new Mock<ICategoryRepository>();
+            _transactionTypeRepositoryMock = new Mock<ITransactionTypeRepository>();
+
+            _categoryRepositoryMock.Setup(x => x.GetPurposeCodeAsync(It.IsAny<int>())).ReturnsAsync(CategoryPurposeCode.Expense);
+            _transactionTypeRepositoryMock.Setup(x => x.GetCodeAsync(It.IsAny<int>())).ReturnsAsync(TransactionTypeCode.Expense);
+
+            _service = new TransactionService(_repositoryMock.Object, _categoryRepositoryMock.Object, _transactionTypeRepositoryMock.Object);
         }
 
         // ── CreateAsync ──────────────────────────────────────────────────────
@@ -75,6 +84,55 @@ namespace FamilyVaultApi.UnitTests.Services
             result.Should().Be(expected);
         }
 
+        [Fact]
+        public async Task CreateAsync_WhenCategoryNotFound_ShouldThrowNotFoundException()
+        {
+            var dto = CreateTransactionDtoBuilder.New().WithCategoryId(99).Build();
+            _categoryRepositoryMock.Setup(x => x.GetPurposeCodeAsync(99)).ReturnsAsync((CategoryPurposeCode?)null);
+
+            Func<Task> act = () => _service.CreateAsync(dto, ClaimsPrincipalTestHelper.CreateAdmin());
+
+            await act.Should().ThrowAsync<NotFoundException>();
+        }
+
+        [Fact]
+        public async Task CreateAsync_WhenTransactionTypeNotFound_ShouldThrowNotFoundException()
+        {
+            var dto = CreateTransactionDtoBuilder.New().WithTransactionTypeId(99).Build();
+            _transactionTypeRepositoryMock.Setup(x => x.GetCodeAsync(99)).ReturnsAsync((TransactionTypeCode?)null);
+
+            Func<Task> act = () => _service.CreateAsync(dto, ClaimsPrincipalTestHelper.CreateAdmin());
+
+            await act.Should().ThrowAsync<NotFoundException>();
+        }
+
+        [Fact]
+        public async Task CreateAsync_WhenCategoryPurposeIsIncompatibleWithTransactionType_ShouldThrowBadRequestException()
+        {
+            var dto = CreateTransactionDtoBuilder.New().WithCategoryId(1).WithTransactionTypeId(2).Build();
+            _categoryRepositoryMock.Setup(x => x.GetPurposeCodeAsync(1)).ReturnsAsync(CategoryPurposeCode.Income);
+            _transactionTypeRepositoryMock.Setup(x => x.GetCodeAsync(2)).ReturnsAsync(TransactionTypeCode.Expense);
+
+            Func<Task> act = () => _service.CreateAsync(dto, ClaimsPrincipalTestHelper.CreateAdmin());
+
+            await act.Should().ThrowAsync<BadRequestException>();
+            _repositoryMock.Verify(x => x.AddAsync(It.IsAny<CreateTransactionDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateAsync_WhenCategoryPurposeMatchesTransactionType_ShouldCreate()
+        {
+            var dto = CreateTransactionDtoBuilder.New().WithCategoryId(1).WithTransactionTypeId(2).Build();
+            var expected = new TransactionResponseDto();
+            _categoryRepositoryMock.Setup(x => x.GetPurposeCodeAsync(1)).ReturnsAsync(CategoryPurposeCode.Income);
+            _transactionTypeRepositoryMock.Setup(x => x.GetCodeAsync(2)).ReturnsAsync(TransactionTypeCode.Income);
+            _repositoryMock.Setup(x => x.AddAsync(dto)).ReturnsAsync(expected);
+
+            var result = await _service.CreateAsync(dto, ClaimsPrincipalTestHelper.CreateAdmin());
+
+            result.Should().Be(expected);
+        }
+
         // ── GetAllAsync ──────────────────────────────────────────────────────
 
         [Fact]
@@ -114,6 +172,19 @@ namespace FamilyVaultApi.UnitTests.Services
 
             result.Should().Be(expected);
             _repositoryMock.Verify(x => x.UpdateAsync(9, dto), Times.Once);
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenCategoryPurposeIsIncompatibleWithTransactionType_ShouldThrowBadRequestException()
+        {
+            var dto = UpdateTransactionDtoBuilder.New().WithCategoryId(1).WithTransactionTypeId(2).Build();
+            _categoryRepositoryMock.Setup(x => x.GetPurposeCodeAsync(1)).ReturnsAsync(CategoryPurposeCode.Income);
+            _transactionTypeRepositoryMock.Setup(x => x.GetCodeAsync(2)).ReturnsAsync(TransactionTypeCode.Expense);
+
+            Func<Task> act = () => _service.UpdateAsync(9, dto);
+
+            await act.Should().ThrowAsync<BadRequestException>();
+            _repositoryMock.Verify(x => x.UpdateAsync(It.IsAny<int>(), It.IsAny<UpdateTransactionDto>()), Times.Never);
         }
 
         // ── DeleteAsync ──────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Category;
 using FamilyVaultApi.Models.Dto.Responses.Category;
 using FamilyVaultApi.Models.Internal;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using Microsoft.EntityFrameworkCore;
 
@@ -111,6 +112,19 @@ namespace FamilyVaultApi.Repositories.Repository
 
             _context.Categories.Remove(entity);
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<CategoryPurposeCode?> GetPurposeCodeAsync(int categoryId)
+        {
+            var code = await _context.Categories
+                .Where(x => x.CategoryId == categoryId)
+                .Select(x => x.Purpose.Code)
+                .FirstOrDefaultAsync();
+
+            if (code == null)
+                return null;
+
+            return Enum.Parse<CategoryPurposeCode>(code, true);
         }
     }
 }

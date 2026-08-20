@@ -40,16 +40,31 @@ namespace FamilyVaultApi.Repositories.Repository
                 .Where(x => x.TransactionType.Code == incomeCode)
                 .SumAsync(x => (decimal?)x.Amount) ?? 0;
 
-            var byCategory = await q
-                .GroupBy(x => new { x.CategoryId, x.Category.Description })
-                .Select(g => new CategorySummaryItemDto
+            var rawByCategory = await q
+                .GroupBy(x => new { x.CategoryId, x.Category.Description, x.TransactionTypeId, x.TransactionType.Code, x.TransactionType.Name })
+                .Select(g => new
                 {
-                    CategoryId = g.Key.CategoryId,
-                    CategoryDescription = g.Key.Description,
+                    g.Key.CategoryId,
+                    g.Key.Description,
+                    g.Key.TransactionTypeId,
+                    g.Key.Code,
+                    g.Key.Name,
                     Total = g.Sum(x => x.Amount)
                 })
                 .OrderByDescending(x => x.Total)
                 .ToListAsync();
+
+            var byCategory = rawByCategory
+                .Select(x => new CategorySummaryItemDto
+                {
+                    CategoryId = x.CategoryId,
+                    CategoryDescription = x.Description,
+                    TransactionTypeId = x.TransactionTypeId,
+                    TransactionTypeCode = Enum.Parse<TransactionTypeCode>(x.Code, true),
+                    TransactionTypeName = x.Name,
+                    Total = x.Total
+                })
+                .ToList();
 
             return new DashboardSummaryDto
             {

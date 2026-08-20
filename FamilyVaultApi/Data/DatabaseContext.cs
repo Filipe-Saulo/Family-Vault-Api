@@ -68,15 +68,6 @@ namespace FamilyVaultApi.Data
                     Description = "Apenas para receitas",
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
-                },
-                new CategoryPurpose
-                {
-                    CategoryPurposeId = 3,
-                    Code = "both",
-                    Name = "Ambas",
-                    Description = "Para despesas e receitas",
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow
                 }
             );
 
@@ -128,15 +119,22 @@ namespace FamilyVaultApi.Data
                 new Category
                 {
                     CategoryId = 4,
-                    Description = "Investimentos",
-                    CategoryPurposeId = 3, // both
+                    Description = "Aporte em Investimentos",
+                    CategoryPurposeId = 1, // expense
                     CreatedAt = DateTime.UtcNow
                 },
                 new Category
                 {
                     CategoryId = 5,
+                    Description = "Rendimento em Investimentos",
+                    CategoryPurposeId = 2, // income
+                    CreatedAt = DateTime.UtcNow
+                },
+                new Category
+                {
+                    CategoryId = 6,
                     Description = "Lazer",
-                    CategoryPurposeId = 3, // both
+                    CategoryPurposeId = 1, // expense
                     CreatedAt = DateTime.UtcNow
                 }
             );

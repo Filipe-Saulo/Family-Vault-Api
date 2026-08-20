@@ -5,6 +5,7 @@ using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.TransactionType;
 using FamilyVaultApi.Models.Dto.Responses.TransactionType;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using Microsoft.EntityFrameworkCore;
 
@@ -68,6 +69,19 @@ namespace FamilyVaultApi.Repositories.Repository
             await _context.SaveChangesAsync();
 
             return _mapper.Map<TransactionTypeResponseDto>(entity);
+        }
+
+        public async Task<TransactionTypeCode?> GetCodeAsync(int transactionTypeId)
+        {
+            var code = await _context.TransactionTypes
+                .Where(x => x.TransactionTypeId == transactionTypeId)
+                .Select(x => x.Code)
+                .FirstOrDefaultAsync();
+
+            if (code == null)
+                return null;
+
+            return Enum.Parse<TransactionTypeCode>(code, true);
         }
     }
 }

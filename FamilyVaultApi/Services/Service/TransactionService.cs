@@ -1,4 +1,4 @@
-﻿using FamilyVaultApi.Exceptions;
+using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Transaction;
 using FamilyVaultApi.Models.Dto.Responses.TransactionResponse;
 using FamilyVaultApi.Models.Internal;
@@ -11,10 +11,14 @@ namespace FamilyVaultApi.Services.Service
     public class TransactionService : ITransactionService
     {
         private readonly ITransactionRepository _repository;
+        private readonly ICategoryRepository _categoryRepository;
+        private readonly ITransactionTypeRepository _transactionTypeRepository;
 
-        public TransactionService(ITransactionRepository repository)
+        public TransactionService(ITransactionRepository repository, ICategoryRepository categoryRepository, ITransactionTypeRepository transactionTypeRepository)
         {
             _repository = repository;
+            _categoryRepository = categoryRepository;
+            _transactionTypeRepository = transactionTypeRepository;
         }
 
         public async Task<TransactionResponseDto> CreateAsync(CreateTransactionDto dto, ClaimsPrincipal userClaims)
@@ -33,6 +37,8 @@ namespace FamilyVaultApi.Services.Service
                 throw new BadRequestException("Informe o UserId da transação.");
             }
 
+            await EnsureCategoryAllowsTransactionTypeAsync(dto.CategoryId, dto.TransactionTypeId);
+
             return await _repository.AddAsync(dto);
         }
 
@@ -47,12 +53,28 @@ namespace FamilyVaultApi.Services.Service
             if (dto == null)
                 throw new ArgumentNullException(nameof(dto));
 
+            await EnsureCategoryAllowsTransactionTypeAsync(dto.CategoryId, dto.TransactionTypeId);
+
             return await _repository.UpdateAsync(id, dto);
         }
 
         public async Task DeleteAsync(int id)
         {
             await _repository.DeleteAsync(id);
+        }
+
+        private async Task EnsureCategoryAllowsTransactionTypeAsync(int categoryId, int transactionTypeId)
+        {
+            var purpose = await _categoryRepository.GetPurposeCodeAsync(categoryId);
+            if (purpose == null)
+                throw new NotFoundException("Category não encontrada", categoryId);
+
+            var type = await _transactionTypeRepository.GetCodeAsync(transactionTypeId);
+            if (type == null)
+                throw new NotFoundException("TransactionType não encontrado", transactionTypeId);
+
+            if (purpose.Value.ToString() != type.Value.ToString())
+                throw new BadRequestException("O tipo de transação selecionado não é compatível com o propósito da categoria.");
         }
     }
 }
