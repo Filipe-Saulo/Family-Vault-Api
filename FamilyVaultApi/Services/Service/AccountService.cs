@@ -1,12 +1,14 @@
-﻿using FamilyVaultApi.Common.Validators;
+using FamilyVaultApi.Common.Validators;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
 using FamilyVaultApi.Models.Dto.Responses.Account;
+using FamilyVaultApi.Models.Internal;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.Security;
 using System.Security.Claims;
 
 namespace FamilyVaultApi.Services.Service
@@ -14,11 +16,16 @@ namespace FamilyVaultApi.Services.Service
     public class AccountService : IAccountService
     {
         private readonly IAccountRepository _repository;
+        private readonly IIdentityService _identityService;
         private readonly IHttpContextAccessor _httpContextAccessor;
-        public AccountService(IAccountRepository repository, IHttpContextAccessor httpContextAccessor)
+        private readonly ITokenService _tokenService;
+
+        public AccountService(IAccountRepository repository, IIdentityService identityService, IHttpContextAccessor httpContextAccessor, ITokenService tokenService)
         {
             _repository = repository;
+            _identityService = identityService;
             _httpContextAccessor = httpContextAccessor;
+            _tokenService = tokenService;
         }
 
         internal class RegisterContext
@@ -83,7 +90,7 @@ namespace FamilyVaultApi.Services.Service
 
         private async Task ValidateAdminRegistrationAllowedAsync(List<IdentityError> errors)
         {
-            if (!await _repository.AdministratorExistsAsync())
+            if (!await _identityService.AdministratorExistsAsync())
                 return; // bootstrap: primeiro Administrator pode se registrar livremente
 
             var caller = _httpContextAccessor.HttpContext?.User;
@@ -118,8 +125,8 @@ namespace FamilyVaultApi.Services.Service
 
             // Decide fluxo
             return ctx.IsAdmin
-                ? await _repository.RegisterAdmin(dto)
-                : await _repository.RegisterUser(dto, phoneFormated);
+                ? await _identityService.RegisterAdmin(dto)
+                : await _identityService.RegisterUser(dto, phoneFormated);
         }
 
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto)
@@ -133,17 +140,50 @@ namespace FamilyVaultApi.Services.Service
             if (!isAdmin && !isUser)
                 throw new BadRequestException("Telefone e E-mail estão preenchidos.");
 
-            var authResult = await _repository.Login(loginDto);
+            var user = await _identityService.FindUserByLoginAsync(loginDto);
+            if (user == null)
+                throw new NotFoundException("Usuário não encontrado", loginDto.Email ?? loginDto.Phone);
 
-            if (authResult == null)
-                throw new UnauthorizedAccessException("Usuário inválido.");
+            if (!await _identityService.CheckPasswordAsync(user, loginDto.Password))
+                throw new BadRequestException("Senha inválida.");
+
+            await _identityService.UpdateLastLoginAsync(user);
+
+            var (userIsAdmin, userIsUser) = await _identityService.GetRolesAsync(user);
+            if (!userIsAdmin && !userIsUser)
+                throw new InvalidOperationException("Usuário sem role válida.");
+
+            var token = await BuildAccessTokenAsync(user, userIsAdmin, userIsUser);
+            var refreshToken = await _identityService.CreateRefreshTokenAsync(user);
 
             return new AuthResponseDto
             {
-                UserId = authResult.UserId,
-                Token = authResult.Token,
-                RefreshToken = authResult.RefreshToken
+                UserId = user.Id,
+                Token = token,
+                RefreshToken = refreshToken
             };
+        }
+
+        private async Task<string> BuildAccessTokenAsync(Data.Entities.User user, bool isAdmin, bool isUser)
+        {
+            var userClaims = await _identityService.GetUserClaimsAsync(user);
+
+            var permissionClaims = new List<Claim>();
+            if (isAdmin) permissionClaims.AddRange(await _identityService.GetRoleClaimsAsync("Administrator"));
+            if (isUser) permissionClaims.AddRange(await _identityService.GetRoleClaimsAsync("User"));
+
+            var identifier = isAdmin ? user.Email : user.PhoneNumber;
+
+            return _tokenService.GenerateAccessToken(new TokenClaimsData
+            {
+                UserId = user.Id,
+                Identifier = identifier,
+                IsAdmin = isAdmin,
+                IsUser = isUser,
+                SecurityStamp = user.SecurityStamp,
+                UserClaims = userClaims,
+                PermissionClaims = permissionClaims
+            });
         }
 
         public async Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request)
@@ -155,7 +195,34 @@ namespace FamilyVaultApi.Services.Service
             if (string.IsNullOrEmpty(userId))
                 throw new SecurityTokenException("Token sem identificador de usuário");
 
-            return await _repository.RefreshTokenAsync(request);
+            var username = tokenContent.Claims.FirstOrDefault(c =>
+                c.Type == JwtRegisteredClaimNames.Email || c.Type == "phone_number")?.Value;
+
+            if (string.IsNullOrEmpty(username))
+                throw new SecurityTokenException("Token inválido.");
+
+            var user = await _identityService.FindByNameAsync(username);
+            if (user == null)
+                throw new UnauthorizedAccessException("Usuário não encontrado ou não autorizado.");
+
+            var isValidRefreshToken = await _identityService.VerifyRefreshTokenAsync(user, request.RefreshToken);
+            if (!isValidRefreshToken)
+            {
+                await _identityService.RevokeSecurityStampAsync(user);
+                throw new SecurityTokenException("Refresh token inválido ou expirado.");
+            }
+
+            var (isAdmin, isUser) = await _identityService.GetRolesAsync(user);
+
+            var newAccessToken = await BuildAccessTokenAsync(user, isAdmin, isUser);
+            var newRefreshToken = await _identityService.CreateRefreshTokenAsync(user);
+
+            return new AuthResponseDto
+            {
+                Token = newAccessToken,
+                UserId = user.Id,
+                RefreshToken = newRefreshToken
+            };
         }
 
         public async Task LogoutAsync(string? token = null)
@@ -163,12 +230,12 @@ namespace FamilyVaultApi.Services.Service
             var context = _httpContextAccessor.HttpContext;
 
             string? userId = null;
-            
+
             if (context?.User.Identity?.IsAuthenticated == true)
             {
                 userId = context.User.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
             }
-            
+
             if (string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(token))
             {
                 var handler = new JwtSecurityTokenHandler();
@@ -178,15 +245,8 @@ namespace FamilyVaultApi.Services.Service
 
             if (string.IsNullOrEmpty(userId))
                 throw new UnauthorizedAccessException("Token inválido ou ausente.");
-            
-            await _repository.LogoutAsync(userId);
 
-            context?.Response.Cookies.Delete("refreshToken", new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None
-            });
+            await _identityService.LogoutAsync(userId);
         }
 
         public async Task ResetPasswordAsync(PasswordResetRequestDto dto, ClaimsPrincipal userClaims)
@@ -197,15 +257,18 @@ namespace FamilyVaultApi.Services.Service
             if (string.IsNullOrWhiteSpace(dto.Phone))
                 throw new ArgumentException("Número de telefone é obrigatório.");
 
-            string uid = null;
+            var user = await _repository.FindByPhoneAsync(dto.Phone);
+            if (user == null)
+                throw new NotFoundException("Usuário não encontrado.", dto.Phone);
+
             bool isLogged = userClaims?.Identity?.IsAuthenticated == true;
+            bool isAdmin = isLogged && userClaims.IsInRole("Administrator");
+            string? uid = isLogged ? userClaims.FindFirst("uid")?.Value : null;
 
-            if (isLogged)
-            {
-                uid = userClaims.FindFirst("uid")?.Value;
-            }
+            if (isLogged && !isAdmin && uid != user.Id)
+                throw new SecurityException("Você não tem permissão para acessar este recurso.");
 
-            await _repository.ResetPasswordAsync(dto, uid, isLogged);
+            await _repository.UpdatePasswordAsync(user, dto.Password);
         }
     }
 }

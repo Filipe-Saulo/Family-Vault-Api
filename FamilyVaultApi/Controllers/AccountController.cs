@@ -63,6 +63,7 @@ namespace FamilyVaultApi.Controllers
         public async Task<IActionResult> Logout([FromBody] LogoutRequestDto? request = null)
         {
             await _accountService.LogoutAsync(request?.Token);
+            ClearRefreshTokenCookie();
             return Ok(ApiResponse<object>.Ok(null, "Logout realizado com sucesso."));
         }
 
@@ -117,6 +118,16 @@ namespace FamilyVaultApi.Controllers
         private void SetRefreshTokenCookie(string token)
         {
             Response.Cookies.Append("refreshToken", token, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.None,
+            });
+        }
+
+        private void ClearRefreshTokenCookie()
+        {
+            Response.Cookies.Delete("refreshToken", new CookieOptions
             {
                 HttpOnly = true,
                 Secure = true,
