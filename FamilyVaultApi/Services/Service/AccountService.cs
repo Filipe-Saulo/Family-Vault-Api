@@ -19,13 +19,15 @@ namespace FamilyVaultApi.Services.Service
         private readonly IIdentityService _identityService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ITokenService _tokenService;
+        private readonly IPhoneNumberService _phoneNumberService;
 
-        public AccountService(IAccountRepository repository, IIdentityService identityService, IHttpContextAccessor httpContextAccessor, ITokenService tokenService)
+        public AccountService(IAccountRepository repository, IIdentityService identityService, IHttpContextAccessor httpContextAccessor, ITokenService tokenService, IPhoneNumberService phoneNumberService)
         {
             _repository = repository;
             _identityService = identityService;
             _httpContextAccessor = httpContextAccessor;
             _tokenService = tokenService;
+            _phoneNumberService = phoneNumberService;
         }
 
         internal class RegisterContext
@@ -58,28 +60,13 @@ namespace FamilyVaultApi.Services.Service
         {
             if (string.IsNullOrEmpty(dto.PhoneNumber)) return null;
 
-            string phone = dto.PhoneNumber.Trim();
-            string formatted;
-
-            if (phone.StartsWith("55"))
+            if (!_phoneNumberService.TryValidateAndFormat(dto.PhoneNumber, "BR", out var formatted))
             {
-                if (!PhoneValidator.ValidarCelularBr(phone, out formatted))
-                {
-                    errors.Add(new IdentityError { Code = "InvalidPhone", Description = "Telefone brasileiro inválido." });
-                    return null;
-                }
-            }
-            else
-            {
-                if (!PhoneValidator.ValidarCelularInternacional(phone))
-                {
-                    errors.Add(new IdentityError { Code = "InvalidPhone", Description = "Telefone internacional inválido." });
-                    return null;
-                }
-                formatted = phone;
+                errors.Add(new IdentityError { Code = "InvalidPhone", Description = "Telefone inválido." });
+                return null;
             }
 
-            if (await _repository.PhoneExistsAsync(formatted))
+            if (await _repository.PhoneExistsAsync(formatted!))
             {
                 errors.Add(new IdentityError { Code = "DuplicatePhoneNumber", Description = "Número já cadastrado." });
                 return null;

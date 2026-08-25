@@ -76,7 +76,7 @@ CORS is configured (policy `"WebClient"`) to allow `http://localhost:5173` (expe
 
 ## Validators
 
-`Common/Validators/` contains regex-based `EmailValidator` and Brazilian phone format `PhoneValidator`. Phone format is enforced via `PhoneValidatorCustomAttribute` (in `Common/Validators/DtoValidators/`) on request DTOs.
+`Common/Validators/` contains a regex-based `EmailValidator`. Phone numbers use a two-layer pattern: `PhoneValidatorCustomAttribute`/`PhoneValidatorCustomRequiredAttribute` (`Common/Validators/DtoValidators/`) do a cheap structural check on the DTO (digits/`+`/spaces/parentheses/hyphen, plausible length) with no DI, applied to `CreateAccountRequestDto.PhoneNumber`, `LoginRequestDto.Phone`, and `PasswordResetRequestDto.Phone`; real per-country validation and E.164 normalization happen in `Services/Service/PhoneNumberService.cs` (`IPhoneNumberService`, wraps `libphonenumber-csharp`, registered as a DI singleton in `Program.cs`), called from `AccountService.ValidatePhoneAsync` during registration. Canonical stored phone format is E.164 with a leading `+` (e.g. `+5511987654312`) — `UserName`/`NormalizedUserName`/`PhoneNumber` on `User` must stay in sync with this format since login/refresh do exact-string lookups with no re-normalization.
 
 ## Nullable / Language Settings
 

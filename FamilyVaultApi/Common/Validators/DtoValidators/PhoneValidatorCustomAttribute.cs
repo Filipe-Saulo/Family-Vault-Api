@@ -1,21 +1,21 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
 
 namespace FamilyVaultApi.Common.Validators.DtoValidators
 {
     public class PhoneValidatorCustomAttribute : ValidationAttribute
     {
-        public override bool IsValid(object value)
+        private static readonly Regex ShapeRegex = new(@"^[\d+()\-\s]{8,17}$", RegexOptions.Compiled);
+
+        public override bool IsValid(object? value)
         {
             if (value == null || string.IsNullOrWhiteSpace(value.ToString()))
-                return false;
+                return true;
 
-            string numeroFormatado;
-            var isValid = PhoneValidator.ValidarCelularBr(value.ToString(), out numeroFormatado);
+            var isValid = ShapeRegex.IsMatch(value.ToString()!);
 
             if (!isValid)
-            {
-                ErrorMessage = "Número de celular inválido. O número deve ter 11 dígitos e começar com '9' após o DDD.";
-            }
+                ErrorMessage = "Número de telefone inválido.";
 
             return isValid;
         }

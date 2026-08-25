@@ -1,9 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using FamilyVaultApi.Common.Validators.DtoValidators;
+using System.ComponentModel.DataAnnotations;
 
 namespace FamilyVaultApi.Models.Dto.Requests.Account
 {
     public class CreateAccountRequestDto
     {
+        [PhoneValidatorCustom]
         public string PhoneNumber { get; init; }
         public string Email { get; init; }
         [Required(ErrorMessage = "Password é obrigatório.")]

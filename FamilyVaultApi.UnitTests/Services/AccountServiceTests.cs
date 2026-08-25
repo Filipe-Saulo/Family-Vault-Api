@@ -23,6 +23,7 @@ namespace FamilyVaultApi.UnitTests.Services
         private readonly Mock<IAccountRepository> _repositoryMock;
         private readonly Mock<IIdentityService> _identityServiceMock;
         private readonly Mock<ITokenService> _tokenServiceMock;
+        private readonly Mock<IPhoneNumberService> _phoneNumberServiceMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
 
         public AccountServiceTests()
@@ -30,6 +31,7 @@ namespace FamilyVaultApi.UnitTests.Services
             _repositoryMock = new Mock<IAccountRepository>();
             _identityServiceMock = new Mock<IIdentityService>();
             _tokenServiceMock = new Mock<ITokenService>();
+            _phoneNumberServiceMock = new Mock<IPhoneNumberService>();
             _httpContextAccessorMock = HttpContextAccessorTestHelper.WithNoHttpContext();
 
             SetUpHappyPathRepositoryDefaults();
@@ -41,9 +43,14 @@ namespace FamilyVaultApi.UnitTests.Services
             _repositoryMock.Setup(x => x.PhoneExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
             _identityServiceMock.Setup(x => x.AdministratorExistsAsync()).ReturnsAsync(false);
             _tokenServiceMock.Setup(x => x.GenerateAccessToken(It.IsAny<TokenClaimsData>())).Returns("fake-jwt-token");
+
+            string defaultFormatted = "+5511987654312";
+            _phoneNumberServiceMock
+                .Setup(x => x.TryValidateAndFormat(It.IsAny<string>(), It.IsAny<string>(), out defaultFormatted))
+                .Returns(true);
         }
 
-        private AccountService CreateService() => new(_repositoryMock.Object, _identityServiceMock.Object, _httpContextAccessorMock.Object, _tokenServiceMock.Object);
+        private AccountService CreateService() => new(_repositoryMock.Object, _identityServiceMock.Object, _httpContextAccessorMock.Object, _tokenServiceMock.Object, _phoneNumberServiceMock.Object);
 
         private static User CreateUserEntity(string id = "user-1", string? email = null, string? phoneNumber = null) => new()
         {
@@ -90,6 +97,10 @@ namespace FamilyVaultApi.UnitTests.Services
         public async Task RegisterAsync_WhenBrazilianPhoneIsInvalid_ShouldReturnError()
         {
             var dto = CreateAccountRequestBuilder.New().WithEmail(null).WithPhoneNumber("5511123").Build();
+            string? formatted = null;
+            _phoneNumberServiceMock
+                .Setup(x => x.TryValidateAndFormat("5511123", It.IsAny<string>(), out formatted))
+                .Returns(false);
 
             var errors = await CreateService().RegisterAsync(dto);
 

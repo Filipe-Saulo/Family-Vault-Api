@@ -7,7 +7,7 @@ namespace FamilyVaultApi.UnitTests.Builders.Account
     {
         private static readonly Faker Faker = new("pt_BR");
 
-        private string _phone = "5511987654321";
+        private string _phone = "+5511987654321";
         private string _password = Faker.Internet.Password();
         private string _passwordConfirm;
 

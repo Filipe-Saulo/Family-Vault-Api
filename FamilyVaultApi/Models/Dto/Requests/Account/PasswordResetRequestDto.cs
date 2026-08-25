@@ -5,7 +5,7 @@ namespace FamilyVaultApi.Models.Dto.Requests.Account
 {
     public class PasswordResetRequestDto
     {
-        [PhoneValidatorCustom]
+        [PhoneValidatorCustomRequired]
         public string Phone { get; set; }
         [Required(ErrorMessage = "Senha é obrigatório")]
         public string Password { get; set; }
