@@ -25,7 +25,22 @@ namespace FamilyVaultApi.Services.Service
                 query.UserId = userClaims.FindFirst("uid")?.Value;
             }
 
+            if (!query.StartDate.HasValue && !query.EndDate.HasValue)
+            {
+                var (startOfMonth, endOfMonth) = GetCurrentMonthRange();
+                query.StartDate = startOfMonth;
+                query.EndDate = endOfMonth;
+            }
+
             return await _repository.GetSummaryAsync(query);
+        }
+
+        private static (DateTime Start, DateTime End) GetCurrentMonthRange()
+        {
+            var now = DateTime.UtcNow;
+            var start = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var end = start.AddMonths(1).AddTicks(-1);
+            return (start, end);
         }
     }
 }

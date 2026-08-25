@@ -52,7 +52,7 @@ Financial management app with two user roles:
 
 Core entities: `User` (extends `IdentityUser`) → `Transaction` → `Category` → `CategoryPurpose`. Lookup tables `TransactionType` and `CategoryPurpose`, plus initial `Category` rows, are seeded in the initial migration.
 
-`DashboardController` (`GET /api/dashboard/summary`) aggregates transaction totals per `Category`/`TransactionType` for a date range; results are scoped to the caller's own data when the caller is a `User`, and unscoped for `Administrator`.
+`DashboardController` (`GET /api/dashboard/summary`) aggregates transaction totals per `Category`/`TransactionType` for a date range (`StartDate`/`EndDate` on `DashboardQueryRequestDto`, filtered in `DashboardRepository`); results are scoped to the caller's own data when the caller is a `User`, and unscoped for `Administrator`. If neither `StartDate` nor `EndDate` is supplied, `DashboardService.GetSummaryAsync` defaults the range to the current UTC calendar month; supplying only one of the two leaves the other open-ended (no default applied).
 
 EF Core table naming is mixed: Identity/user tables use a `tb_` prefix (`tb_user`, `tb_roles`, `tb_user_roles`, `tb_user_claims`, `tb_user_logins`, `tb_user_tokens`, `tb_role_claims`, configured in `Data/DatabaseContext.cs`), while domain entity tables use plain plural snake_case with **no** prefix (`categories`, `category_purposes`, `transactions`, `transaction_types`, configured via Fluent API in `Data/Configurations/`).
 
