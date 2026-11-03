@@ -1,5 +1,7 @@
 using FamilyVaultApi.Common;
 using FamilyVaultApi.Exceptions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using System.Net;
 using System.Security;
 using System.Text.Json;
@@ -54,6 +56,16 @@ namespace FamilyVaultApi.Middleware
             {
                 _logger.LogWarning(ex, "Acesso proibido. TraceId={TraceId}", traceId);
                 await HandleExceptionAsync(context, HttpStatusCode.Forbidden, ex.Message, traceId);
+            }
+            catch (SecurityTokenException ex)
+            {
+                _logger.LogWarning(ex, "Token inválido. TraceId={TraceId}", traceId);
+                await HandleExceptionAsync(context, HttpStatusCode.Unauthorized, ex.Message, traceId);
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogWarning(ex, "Conflito ao gravar no banco. TraceId={TraceId}", traceId);
+                await HandleExceptionAsync(context, HttpStatusCode.Conflict, "Operação conflita com registros relacionados.", traceId);
             }
             catch (Exception ex)
             {
