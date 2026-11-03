@@ -45,9 +45,26 @@ namespace FamilyVaultApi.Services.Service
             return await _repository.AddAsync(dto);
         }
 
-        public async Task<PagedResult<TransactionResponseDto>> GetAllAsync(TransactionQueryRequestDto query)
+        public async Task<PagedResult<TransactionResponseDto>> GetAllAsync(TransactionQueryRequestDto query, ClaimsPrincipal userClaims)
         {
             query ??= new TransactionQueryRequestDto();
+
+            if (query.PageNumber <= 0) query.PageNumber = 1;
+            if (query.PageSize <= 0) query.PageSize = 20;
+            else if (query.PageSize > 100) query.PageSize = 100;
+
+            var isAdmin = userClaims.IsInRole("Administrator");
+            var hasManagePermission = userClaims.HasClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageTransactions));
+
+            if (!isAdmin && !hasManagePermission)
+            {
+                var callerId = userClaims.FindFirst("uid")?.Value;
+                if (string.IsNullOrEmpty(callerId))
+                    throw new SecurityException("Você não tem permissão para listar transações.");
+
+                query.UserId = callerId;
+            }
+
             return await _repository.GetAllAsync(query);
         }
 

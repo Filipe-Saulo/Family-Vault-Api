@@ -8,7 +8,7 @@ namespace FamilyVaultApi.Services.IService
     public interface ITransactionService
     {
         Task<TransactionResponseDto> CreateAsync(CreateTransactionDto dto, ClaimsPrincipal userClaims);
-        Task<PagedResult<TransactionResponseDto>> GetAllAsync(TransactionQueryRequestDto query);
+        Task<PagedResult<TransactionResponseDto>> GetAllAsync(TransactionQueryRequestDto query, ClaimsPrincipal userClaims);
         Task<TransactionResponseDto> UpdateAsync(int id, UpdateTransactionDto dto, ClaimsPrincipal userClaims);
         Task DeleteAsync(int id, ClaimsPrincipal userClaims);
     }

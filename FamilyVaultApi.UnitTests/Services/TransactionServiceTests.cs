@@ -10,6 +10,7 @@ using FamilyVaultApi.UnitTests.Helpers;
 using FluentAssertions;
 using Moq;
 using System.Security;
+using System.Security.Claims;
 
 namespace FamilyVaultApi.UnitTests.Services
 {
@@ -146,11 +147,96 @@ namespace FamilyVaultApi.UnitTests.Services
                 .Setup(x => x.GetAllAsync(It.IsAny<TransactionQueryRequestDto>()))
                 .ReturnsAsync(expected);
 
-            var result = await _service.GetAllAsync(null!);
+            var result = await _service.GetAllAsync(null!, ClaimsPrincipalTestHelper.CreateAdmin());
 
             result.Should().Be(expected);
             _repositoryMock.Verify(x => x.GetAllAsync(It.IsAny<TransactionQueryRequestDto>()), Times.Once);
         }
+
+        [Fact]
+        public async Task GetAllAsync_AsUserWithoutUidClaim_ShouldThrowSecurityExceptionAndNotQuery()
+        {
+            var principal = new ClaimsPrincipal(new ClaimsIdentity(
+                new[] { new Claim(ClaimTypes.Role, "User") }, "Test"));
+
+            Func<Task> act = () => _service.GetAllAsync(new TransactionQueryRequestDto(), principal);
+
+            await act.Should().ThrowAsync<SecurityException>();
+            _repositoryMock.Verify(x => x.GetAllAsync(It.IsAny<TransactionQueryRequestDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task GetAllAsync_AsUser_ShouldOverrideUserIdWithCallerId()
+        {
+            var query = new TransactionQueryRequestDto { UserId = "outro-usuario" };
+            TransactionQueryRequestDto? captured = null;
+            CaptureQuery(q => captured = q);
+
+            await _service.GetAllAsync(query, ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            captured!.UserId.Should().Be("user-1");
+        }
+
+        [Fact]
+        public async Task GetAllAsync_AsAdministrator_ShouldKeepQueryUserId()
+        {
+            TransactionQueryRequestDto? captured = null;
+            CaptureQuery(q => captured = q);
+
+            await _service.GetAllAsync(new TransactionQueryRequestDto { UserId = "alvo" }, ClaimsPrincipalTestHelper.CreateAdmin());
+            captured!.UserId.Should().Be("alvo");
+
+            await _service.GetAllAsync(new TransactionQueryRequestDto { UserId = null }, ClaimsPrincipalTestHelper.CreateAdmin());
+            captured!.UserId.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task GetAllAsync_WithManageTransactionsPermission_ShouldKeepQueryUserId()
+        {
+            TransactionQueryRequestDto? captured = null;
+            CaptureQuery(q => captured = q);
+            var caller = ClaimsPrincipalTestHelper.CreateUserWithPermission("user-1", PermissionCode.ManageTransactions);
+
+            await _service.GetAllAsync(new TransactionQueryRequestDto { UserId = "alvo" }, caller);
+
+            captured!.UserId.Should().Be("alvo");
+        }
+
+        [Theory]
+        [InlineData(0, 1)]
+        [InlineData(-5, 1)]
+        [InlineData(3, 3)]
+        public async Task GetAllAsync_PageNumber_ShouldBeNormalizedBeforeRepository(int input, int expected)
+        {
+            TransactionQueryRequestDto? captured = null;
+            CaptureQuery(q => captured = q);
+
+            await _service.GetAllAsync(new TransactionQueryRequestDto { PageNumber = input }, ClaimsPrincipalTestHelper.CreateAdmin());
+
+            captured!.PageNumber.Should().Be(expected);
+        }
+
+        [Theory]
+        [InlineData(0, 20)]
+        [InlineData(-1, 20)]
+        [InlineData(101, 100)]
+        [InlineData(1000, 100)]
+        [InlineData(50, 50)]
+        [InlineData(100, 100)]
+        public async Task GetAllAsync_PageSize_ShouldBeNormalizedBeforeRepository(int input, int expected)
+        {
+            TransactionQueryRequestDto? captured = null;
+            CaptureQuery(q => captured = q);
+
+            await _service.GetAllAsync(new TransactionQueryRequestDto { PageSize = input }, ClaimsPrincipalTestHelper.CreateAdmin());
+
+            captured!.PageSize.Should().Be(expected);
+        }
+
+        private void CaptureQuery(Action<TransactionQueryRequestDto> capture)
+            => _repositoryMock.Setup(x => x.GetAllAsync(It.IsAny<TransactionQueryRequestDto>()))
+                .Callback(capture)
+                .ReturnsAsync(new PagedResult<TransactionResponseDto>());
 
         // ── UpdateAsync ──────────────────────────────────────────────────────
 
