@@ -129,16 +129,16 @@ namespace FamilyVaultApi.Services.Service
 
             var user = await _identityService.FindUserByLoginAsync(loginDto);
             if (user == null)
-                throw new NotFoundException("Usuário não encontrado", loginDto.Email ?? loginDto.Phone);
+                throw new UnauthorizedAccessException("Usuário ou senha inválidos.");
 
             if (!await _identityService.CheckPasswordAsync(user, loginDto.Password))
-                throw new BadRequestException("Senha inválida.");
+                throw new UnauthorizedAccessException("Usuário ou senha inválidos.");
 
             await _identityService.UpdateLastLoginAsync(user);
 
             var (userIsAdmin, userIsUser) = await _identityService.GetRolesAsync(user);
             if (!userIsAdmin && !userIsUser)
-                throw new InvalidOperationException("Usuário sem role válida.");
+                throw new SecurityException("Usuário sem role válida.");
 
             var token = await BuildAccessTokenAsync(user, userIsAdmin, userIsUser);
             var refreshToken = await _identityService.CreateRefreshTokenAsync(user);
@@ -176,17 +176,25 @@ namespace FamilyVaultApi.Services.Service
         public async Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request)
         {
             var handler = new JwtSecurityTokenHandler();
-            var tokenContent = handler.ReadJwtToken(request.Token);
+            JwtSecurityToken tokenContent;
+            try
+            {
+                tokenContent = handler.ReadJwtToken(request.Token);
+            }
+            catch (ArgumentException)
+            {
+                throw new UnauthorizedAccessException("Token inválido.");
+            }
 
             var userId = tokenContent.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
             if (string.IsNullOrEmpty(userId))
-                throw new SecurityTokenException("Token sem identificador de usuário");
+                throw new UnauthorizedAccessException("Token sem identificador de usuário");
 
             var username = tokenContent.Claims.FirstOrDefault(c =>
                 c.Type == JwtRegisteredClaimNames.Email || c.Type == "phone_number")?.Value;
 
             if (string.IsNullOrEmpty(username))
-                throw new SecurityTokenException("Token inválido.");
+                throw new UnauthorizedAccessException("Token inválido.");
 
             var user = await _identityService.FindByNameAsync(username);
             if (user == null)
@@ -196,7 +204,7 @@ namespace FamilyVaultApi.Services.Service
             if (!isValidRefreshToken)
             {
                 await _identityService.RevokeSecurityStampAsync(user);
-                throw new SecurityTokenException("Refresh token inválido ou expirado.");
+                throw new UnauthorizedAccessException("Refresh token inválido ou expirado.");
             }
 
             var (isAdmin, isUser) = await _identityService.GetRolesAsync(user);
@@ -226,7 +234,15 @@ namespace FamilyVaultApi.Services.Service
             if (string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(token))
             {
                 var handler = new JwtSecurityTokenHandler();
-                var jwtToken = handler.ReadJwtToken(token);
+                JwtSecurityToken jwtToken;
+                try
+                {
+                    jwtToken = handler.ReadJwtToken(token);
+                }
+                catch (ArgumentException)
+                {
+                    throw new UnauthorizedAccessException("Token inválido.");
+                }
                 userId = jwtToken.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
             }
 
@@ -239,10 +255,10 @@ namespace FamilyVaultApi.Services.Service
         public async Task ResetPasswordAsync(PasswordResetRequestDto dto, ClaimsPrincipal userClaims)
         {
             if (dto.Password != dto.PasswordConfirm)
-                throw new ArgumentException("A senha e a confirmação de senha não coincidem.");
+                throw new BadRequestException("A senha e a confirmação de senha não coincidem.");
 
             if (string.IsNullOrWhiteSpace(dto.Phone))
-                throw new ArgumentException("Número de telefone é obrigatório.");
+                throw new BadRequestException("Número de telefone é obrigatório.");
 
             var user = await _repository.FindByPhoneAsync(dto.Phone);
             if (user == null)
