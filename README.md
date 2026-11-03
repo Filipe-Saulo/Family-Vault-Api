@@ -17,7 +17,6 @@ Supports **web and mobile clients**.
 - AutoMapper for DTO mapping
 - Serilog logging (console sink + request logging)
 - Swagger / OpenAPI documentation
-- Response caching
 - Health check for MySQL at `/health`
 - Rate limiting on auth endpoints (login, register, reset password, refresh token)
 - Automated test suite (xUnit) covering the Service layer, run on every push via CI
