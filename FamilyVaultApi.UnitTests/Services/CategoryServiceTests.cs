@@ -76,6 +76,42 @@ namespace FamilyVaultApi.UnitTests.Services
             result.Should().Be(expected);
         }
 
+        [Theory]
+        [InlineData(0, 1)]
+        [InlineData(-5, 1)]
+        [InlineData(3, 3)]
+        public async Task GetAllAsync_PageNumber_ShouldBeNormalizedBeforeRepository(int input, int expected)
+        {
+            CategoryQueryRequestDto? captured = null;
+            CaptureQuery(q => captured = q);
+
+            await _service.GetAllAsync(new CategoryQueryRequestDto { PageNumber = input });
+
+            captured!.PageNumber.Should().Be(expected);
+        }
+
+        [Theory]
+        [InlineData(0, 20)]
+        [InlineData(-1, 20)]
+        [InlineData(101, 100)]
+        [InlineData(1000, 100)]
+        [InlineData(50, 50)]
+        [InlineData(100, 100)]
+        public async Task GetAllAsync_PageSize_ShouldBeNormalizedBeforeRepository(int input, int expected)
+        {
+            CategoryQueryRequestDto? captured = null;
+            CaptureQuery(q => captured = q);
+
+            await _service.GetAllAsync(new CategoryQueryRequestDto { PageSize = input });
+
+            captured!.PageSize.Should().Be(expected);
+        }
+
+        private void CaptureQuery(Action<CategoryQueryRequestDto> capture)
+            => _repositoryMock.Setup(x => x.GetAllAsync(It.IsAny<CategoryQueryRequestDto>()))
+                .Callback(capture)
+                .ReturnsAsync(new PagedResult<CategoryResponseDto>());
+
         // ── UpdateAsync ──────────────────────────────────────────────────────
 
         [Fact]

@@ -26,6 +26,11 @@ namespace FamilyVaultApi.Services.Service
         public async Task<PagedResult<CategoryResponseDto>> GetAllAsync(CategoryQueryRequestDto query)
         {
             query ??= new CategoryQueryRequestDto();
+
+            if (query.PageNumber <= 0) query.PageNumber = 1;
+            if (query.PageSize <= 0) query.PageSize = 20;
+            else if (query.PageSize > 100) query.PageSize = 100;
+
             return await _categoryRepository.GetAllAsync(query);
         }
 

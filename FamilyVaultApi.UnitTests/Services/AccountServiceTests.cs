@@ -11,7 +11,6 @@ using FamilyVaultApi.UnitTests.Helpers;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.IdentityModel.Tokens;
 using Moq;
 using System.Security;
 using System.Security.Claims;
@@ -209,18 +208,33 @@ namespace FamilyVaultApi.UnitTests.Services
         }
 
         [Fact]
-        public async Task LoginAsync_WhenUserNotFound_ShouldThrowNotFoundException()
+        public async Task LoginAsync_WhenUserNotFound_ShouldThrowUnauthorizedWithGenericMessage()
         {
             var dto = LoginRequestBuilder.New().WithPhone(null).Build();
             _identityServiceMock.Setup(x => x.FindUserByLoginAsync(dto)).ReturnsAsync((User?)null);
 
             Func<Task> act = () => CreateService().LoginAsync(dto);
 
-            await act.Should().ThrowAsync<NotFoundException>();
+            var ex = (await act.Should().ThrowAsync<UnauthorizedAccessException>()).Which;
+            ex.Message.Should().Be("Usuário ou senha inválidos.");
+            ex.Message.Should().NotContain(dto.Email!);
         }
 
         [Fact]
-        public async Task LoginAsync_WhenPasswordIsInvalid_ShouldThrowBadRequestException()
+        public async Task LoginAsync_WhenUserNotFoundByPhone_ShouldNotLeakPhoneInMessage()
+        {
+            var dto = LoginRequestBuilder.New().WithEmail(null).WithPhone("11987654321").Build();
+            _identityServiceMock.Setup(x => x.FindUserByLoginAsync(dto)).ReturnsAsync((User?)null);
+
+            Func<Task> act = () => CreateService().LoginAsync(dto);
+
+            var ex = (await act.Should().ThrowAsync<UnauthorizedAccessException>()).Which;
+            ex.Message.Should().Be("Usuário ou senha inválidos.");
+            ex.Message.Should().NotContain(dto.Phone!);
+        }
+
+        [Fact]
+        public async Task LoginAsync_WhenPasswordIsInvalid_ShouldThrowUnauthorizedWithSameGenericMessage()
         {
             var dto = LoginRequestBuilder.New().WithPhone(null).Build();
             var user = CreateUserEntity(email: dto.Email);
@@ -229,12 +243,13 @@ namespace FamilyVaultApi.UnitTests.Services
 
             Func<Task> act = () => CreateService().LoginAsync(dto);
 
-            await act.Should().ThrowAsync<BadRequestException>()
-                .WithMessage("*Senha inválida*");
+            var ex = (await act.Should().ThrowAsync<UnauthorizedAccessException>()).Which;
+            ex.Message.Should().Be("Usuário ou senha inválidos.");
+            ex.Message.Should().NotContain(dto.Email!);
         }
 
         [Fact]
-        public async Task LoginAsync_WhenUserHasNoValidRole_ShouldThrowInvalidOperationException()
+        public async Task LoginAsync_WhenUserHasNoValidRole_ShouldThrowSecurityException()
         {
             var dto = LoginRequestBuilder.New().WithPhone(null).Build();
             var user = CreateUserEntity(email: dto.Email);
@@ -244,7 +259,7 @@ namespace FamilyVaultApi.UnitTests.Services
 
             Func<Task> act = () => CreateService().LoginAsync(dto);
 
-            await act.Should().ThrowAsync<InvalidOperationException>();
+            await act.Should().ThrowAsync<SecurityException>();
         }
 
         [Fact]
@@ -272,17 +287,27 @@ namespace FamilyVaultApi.UnitTests.Services
         // ── RefreshTokenAsync ────────────────────────────────────────────────
 
         [Fact]
-        public async Task RefreshTokenAsync_WhenTokenHasNoUidClaim_ShouldThrowSecurityTokenException()
+        public async Task RefreshTokenAsync_WhenTokenHasNoUidClaim_ShouldThrowUnauthorizedAccessException()
         {
             var request = RefreshTokenRequestBuilder.New().WithToken(JwtTokenTestHelper.CreateToken(uid: null)).Build();
 
             Func<Task> act = () => CreateService().RefreshTokenAsync(request);
 
-            await act.Should().ThrowAsync<SecurityTokenException>();
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
         }
 
         [Fact]
-        public async Task RefreshTokenAsync_WhenTokenHasNoUsernameClaim_ShouldThrowSecurityTokenException()
+        public async Task RefreshTokenAsync_WhenTokenIsMalformed_ShouldThrowUnauthorizedAccessException()
+        {
+            var request = RefreshTokenRequestBuilder.New().WithToken("isto-nao-e-um-jwt").Build();
+
+            Func<Task> act = () => CreateService().RefreshTokenAsync(request);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        }
+
+        [Fact]
+        public async Task RefreshTokenAsync_WhenTokenHasNoUsernameClaim_ShouldThrowUnauthorizedAccessException()
         {
             var request = RefreshTokenRequestBuilder.New()
                 .WithToken(JwtTokenTestHelper.CreateToken("user-1", includeUsernameClaim: false))
@@ -290,7 +315,7 @@ namespace FamilyVaultApi.UnitTests.Services
 
             Func<Task> act = () => CreateService().RefreshTokenAsync(request);
 
-            await act.Should().ThrowAsync<SecurityTokenException>();
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
         }
 
         [Fact]
@@ -307,7 +332,7 @@ namespace FamilyVaultApi.UnitTests.Services
         }
 
         [Fact]
-        public async Task RefreshTokenAsync_WhenRefreshTokenIsInvalid_ShouldRevokeSecurityStampAndThrow()
+        public async Task RefreshTokenAsync_WhenRefreshTokenIsInvalid_ShouldRevokeSecurityStampAndThrowUnauthorized()
         {
             var request = RefreshTokenRequestBuilder.New()
                 .WithToken(JwtTokenTestHelper.CreateToken("user-1", usernameClaimValue: "user@example.com"))
@@ -318,7 +343,7 @@ namespace FamilyVaultApi.UnitTests.Services
 
             Func<Task> act = () => CreateService().RefreshTokenAsync(request);
 
-            await act.Should().ThrowAsync<SecurityTokenException>();
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
             _identityServiceMock.Verify(x => x.RevokeSecurityStampAsync(user), Times.Once);
         }
 
@@ -368,6 +393,14 @@ namespace FamilyVaultApi.UnitTests.Services
         }
 
         [Fact]
+        public async Task LogoutAsync_WhenTokenIsMalformed_ShouldThrowUnauthorizedAccessException()
+        {
+            Func<Task> act = () => CreateService().LogoutAsync("isto-nao-e-um-jwt");
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        }
+
+        [Fact]
         public async Task LogoutAsync_WhenNoUidAvailable_ShouldThrowUnauthorizedAccessException()
         {
             Func<Task> act = () => CreateService().LogoutAsync(token: null);
@@ -378,23 +411,36 @@ namespace FamilyVaultApi.UnitTests.Services
         // ── ResetPasswordAsync ───────────────────────────────────────────────
 
         [Fact]
-        public async Task ResetPasswordAsync_WhenPasswordsDoNotMatch_ShouldThrowArgumentException()
+        public async Task ResetPasswordAsync_WhenPasswordsDoNotMatch_ShouldThrowBadRequestException()
         {
             var dto = PasswordResetRequestBuilder.New().WithPassword("Senha123").WithPasswordConfirm("Outra123").Build();
 
             Func<Task> act = () => CreateService().ResetPasswordAsync(dto, ClaimsPrincipalTestHelper.CreateUnauthenticated());
 
-            await act.Should().ThrowAsync<ArgumentException>();
+            await act.Should().ThrowAsync<BadRequestException>();
         }
 
         [Fact]
-        public async Task ResetPasswordAsync_WhenPhoneIsMissing_ShouldThrowArgumentException()
+        public async Task ResetPasswordAsync_WhenPhoneIsMissing_ShouldThrowBadRequestException()
         {
             var dto = PasswordResetRequestBuilder.New().WithPhone(" ").Build();
 
             Func<Task> act = () => CreateService().ResetPasswordAsync(dto, ClaimsPrincipalTestHelper.CreateUnauthenticated());
 
-            await act.Should().ThrowAsync<ArgumentException>();
+            await act.Should().ThrowAsync<BadRequestException>();
+        }
+
+        [Fact(Skip = "API-2 (outro lote): ResetPasswordAsync aceita chamada anônima e troca a senha do telefone informado — remover Skip após a regra de autorização")]
+        public async Task ResetPasswordAsync_WhenAnonymousTargetsAnotherUsersPhone_ShouldBeRejectedAndNotUpdatePassword()
+        {
+            var dto = PasswordResetRequestBuilder.New().Build();
+            var victim = CreateUserEntity(id: "vitima-1", phoneNumber: dto.Phone);
+            _repositoryMock.Setup(x => x.FindByPhoneAsync(dto.Phone)).ReturnsAsync(victim);
+
+            Func<Task> act = () => CreateService().ResetPasswordAsync(dto, ClaimsPrincipalTestHelper.CreateUnauthenticated());
+
+            await act.Should().ThrowAsync<Exception>();
+            _repositoryMock.Verify(x => x.UpdatePasswordAsync(It.IsAny<User>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]

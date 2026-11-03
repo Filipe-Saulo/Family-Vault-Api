@@ -196,12 +196,6 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(nameof(PermissionCode.ManageUsers), p => p.RequireClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageUsers)));
 });
 
-builder.Services.AddResponseCaching(options =>
-{
-    options.MaximumBodySize = 1024;
-    options.UseCaseSensitivePaths = true;
-});
-
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
@@ -253,18 +247,9 @@ app.UseHttpsRedirection();
 
 app.UseCors("WebClient");
 
-app.UseResponseCaching();
-
 app.Use(async (context, next) =>
 {
-    context.Response.GetTypedHeaders().CacheControl =
-        new Microsoft.Net.Http.Headers.CacheControlHeaderValue()
-        {
-            Public = true,
-            MaxAge = TimeSpan.FromSeconds(10)
-        };
-    context.Response.Headers[Microsoft.Net.Http.Headers.HeaderNames.Vary] =
-        new string[] { "Accept-Encoding" };
+    context.Response.Headers[Microsoft.Net.Http.Headers.HeaderNames.CacheControl] = "no-store";
 
     await next();
 });
