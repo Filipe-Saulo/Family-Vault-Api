@@ -43,6 +43,9 @@ namespace FamilyVaultApi.Repositories.Repository
             _context.Categories.Add(entity);
             await _context.SaveChangesAsync();
 
+            // a resposta traz o propósito aninhado, que não vem preenchido numa entidade recém-criada
+            await _context.Entry(entity).Reference(x => x.Purpose).LoadAsync();
+
 
             return _mapper.Map<CategoryResponseDto>(entity);
         }
