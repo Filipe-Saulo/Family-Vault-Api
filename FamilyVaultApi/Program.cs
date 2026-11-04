@@ -194,9 +194,21 @@ builder.Services.AddControllers()
     {
         options.InvalidModelStateResponseFactory = context =>
         {
-            var errors = context.ModelState
-                .Where(kvp => kvp.Value?.Errors.Count > 0)
-                .SelectMany(kvp => kvp.Value!.Errors.Select(e => e.ErrorMessage));
+            var invalid = context.ModelState.Where(kvp => kvp.Value?.Errors.Count > 0).ToList();
+
+            // Erro de conversão do JSON (chave "$" ou "$.campo"): a mensagem do System.Text.Json é em inglês e
+            // vem acompanhada de um "The x field is required." do parâmetro; responde só a mensagem traduzida.
+            var jsonErrors = invalid
+                .Where(kvp => kvp.Key.StartsWith('$'))
+                .Select(kvp => kvp.Key.TrimStart('$', '.'))
+                .Select(field => field.Length == 0
+                    ? "Corpo da requisição inválido."
+                    : $"Valor inválido para o campo '{field}'.")
+                .ToList();
+
+            var errors = jsonErrors.Count > 0
+                ? jsonErrors
+                : invalid.SelectMany(kvp => kvp.Value!.Errors.Select(e => e.ErrorMessage));
 
             var response = new ApiResponse<object>(string.Join(" | ", errors))
             {
