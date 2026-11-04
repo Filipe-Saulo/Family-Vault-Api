@@ -1,4 +1,5 @@
-﻿using FamilyVaultApi.Common.Validators;
+﻿using FamilyVaultApi.Common;
+using FamilyVaultApi.Common.Validators;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
 using FamilyVaultApi.Models.Dto.Requests.User;
@@ -136,11 +137,7 @@ namespace FamilyVaultApi.Services.Service
             if (userClaims == null || !userClaims.Identity.IsAuthenticated)
                 throw new UnauthorizedAccessException("Usuário não autenticado.");
 
-            var currentUserId = userClaims.FindFirst("uid")?.Value;
-            var isAdmin = userClaims.IsInRole("Administrator");
-
-            if (!isAdmin && currentUserId != userId)
-                throw new SecurityException("Você não tem permissão para acessar este recurso.");
+            await EnsureCanModifyUserAsync(userId, userClaims);
 
             return await _userRepository.UpdateAsync(userId, dto);
         }
@@ -150,16 +147,25 @@ namespace FamilyVaultApi.Services.Service
             if (userClaims == null || !userClaims.Identity.IsAuthenticated)
                 throw new UnauthorizedAccessException("Usuário não autenticado.");
 
-            var currentUserId = userClaims.FindFirst("uid")?.Value;
-            var isAdmin = userClaims.IsInRole("Administrator");
-
-            if (!isAdmin && currentUserId != userId)
-                throw new SecurityException("Você não tem permissão para acessar este recurso.");
+            await EnsureCanModifyUserAsync(userId, userClaims);
 
             if (await _userRepository.IsLastAdministratorAsync(userId))
                 throw new ConflictException("Não é possível excluir o último administrador.");
 
             await _userRepository.DeleteAsync(userId);
+        }
+
+        // Administrator mexe em qualquer usuário; ManageUsers, em si e em contas que não são Administrator; os demais, só em si.
+        private async Task EnsureCanModifyUserAsync(string userId, ClaimsPrincipal userClaims)
+        {
+            var currentUserId = userClaims.FindFirst("uid")?.Value;
+
+            if (userClaims.IsInRole("Administrator") || currentUserId == userId)
+                return;
+
+            var hasManagePermission = userClaims.HasClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageUsers));
+            if (!hasManagePermission || await _userRepository.IsAdministratorAsync(userId))
+                throw new SecurityException("Você não tem permissão para acessar este recurso.");
         }
 
         public async Task<List<PermissionCode>> GetPermissionsAsync(string userId)

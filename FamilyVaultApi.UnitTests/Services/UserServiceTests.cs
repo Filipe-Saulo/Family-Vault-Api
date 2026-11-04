@@ -198,6 +198,94 @@ namespace FamilyVaultApi.UnitTests.Services
             _repositoryMock.Verify(x => x.DeleteAsync(It.IsAny<string>()), Times.Never);
         }
 
+        // ── ManageUsers ──────────────────────────────────────────────────────
+
+        [Fact]
+        public async Task UpdateUserAsync_WhenManageUsersUpdatesRegularUser_ShouldSucceed()
+        {
+            var dto = UpdateUserDtoBuilder.New().Build();
+            var expected = new UserResponseDto { UserId = "target-user" };
+
+            _repositoryMock.Setup(x => x.IsAdministratorAsync("target-user")).ReturnsAsync(false);
+            _repositoryMock.Setup(x => x.UpdateAsync("target-user", dto)).ReturnsAsync(expected);
+
+            var result = await _service.UpdateUserAsync("target-user", dto,
+                ClaimsPrincipalTestHelper.CreateUserWithPermission("user-1", PermissionCode.ManageUsers));
+
+            result.Should().Be(expected);
+        }
+
+        [Fact]
+        public async Task UpdateUserAsync_WhenManageUsersUpdatesAdministrator_ShouldThrowSecurityException()
+        {
+            var dto = UpdateUserDtoBuilder.New().Build();
+
+            _repositoryMock.Setup(x => x.IsAdministratorAsync("admin-1")).ReturnsAsync(true);
+
+            Func<Task> act = () => _service.UpdateUserAsync("admin-1", dto,
+                ClaimsPrincipalTestHelper.CreateUserWithPermission("user-1", PermissionCode.ManageUsers));
+
+            await act.Should().ThrowAsync<SecurityException>();
+            _repositoryMock.Verify(x => x.UpdateAsync(It.IsAny<string>(), It.IsAny<UpdateUserDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task UpdateUserAsync_WhenOtherPermissionUpdatesAnotherUser_ShouldThrowSecurityException()
+        {
+            var dto = UpdateUserDtoBuilder.New().Build();
+
+            Func<Task> act = () => _service.UpdateUserAsync("other-user", dto,
+                ClaimsPrincipalTestHelper.CreateUserWithPermission("user-1", PermissionCode.ManageTransactions));
+
+            await act.Should().ThrowAsync<SecurityException>();
+            _repositoryMock.Verify(x => x.IsAdministratorAsync(It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task UpdateUserAsync_WhenManageUsersTargetDoesNotExist_ShouldThrowNotFoundException()
+        {
+            var dto = UpdateUserDtoBuilder.New().Build();
+
+            _repositoryMock.Setup(x => x.IsAdministratorAsync("missing"))
+                .ThrowsAsync(new NotFoundException("Usuário", "missing"));
+
+            Func<Task> act = () => _service.UpdateUserAsync("missing", dto,
+                ClaimsPrincipalTestHelper.CreateUserWithPermission("user-1", PermissionCode.ManageUsers));
+
+            await act.Should().ThrowAsync<NotFoundException>();
+        }
+
+        [Fact]
+        public async Task DeleteUserAsync_WhenManageUsersDeletesRegularUser_ShouldSucceed()
+        {
+            _repositoryMock.Setup(x => x.IsAdministratorAsync("target-user")).ReturnsAsync(false);
+
+            await _service.DeleteUserAsync("target-user",
+                ClaimsPrincipalTestHelper.CreateUserWithPermission("user-1", PermissionCode.ManageUsers));
+
+            _repositoryMock.Verify(x => x.DeleteAsync("target-user"), Times.Once);
+        }
+
+        [Fact]
+        public async Task DeleteUserAsync_WhenManageUsersDeletesAdministrator_ShouldThrowSecurityException()
+        {
+            _repositoryMock.Setup(x => x.IsAdministratorAsync("admin-1")).ReturnsAsync(true);
+
+            Func<Task> act = () => _service.DeleteUserAsync("admin-1",
+                ClaimsPrincipalTestHelper.CreateUserWithPermission("user-1", PermissionCode.ManageUsers));
+
+            await act.Should().ThrowAsync<SecurityException>();
+            _repositoryMock.Verify(x => x.DeleteAsync(It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task DeleteUserAsync_WhenAdminDeletesAnotherUser_ShouldNotCheckTargetRole()
+        {
+            await _service.DeleteUserAsync("target-user", ClaimsPrincipalTestHelper.CreateAdmin());
+
+            _repositoryMock.Verify(x => x.IsAdministratorAsync(It.IsAny<string>()), Times.Never);
+        }
+
         // ── CreateUserAsync ──────────────────────────────────────────────────
 
         private static CreateUserRequestDto NewCreateDto(string role, string? email, string? phone) => new()

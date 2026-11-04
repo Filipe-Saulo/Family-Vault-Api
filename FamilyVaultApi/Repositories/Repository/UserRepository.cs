@@ -134,6 +134,15 @@ namespace FamilyVaultApi.Repositories.Repository
             return administrators.Count == 1 && administrators[0].Id == userId;
         }
 
+        public async Task<bool> IsAdministratorAsync(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                throw new NotFoundException("Usuário", userId);
+
+            return await _userManager.IsInRoleAsync(user, "Administrator");
+        }
+
         public async Task<List<PermissionCode>> GetPermissionsAsync(string userId)
         {
             var user = await _userManager.FindByIdAsync(userId);
