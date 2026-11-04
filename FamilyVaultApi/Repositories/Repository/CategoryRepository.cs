@@ -25,7 +25,7 @@ namespace FamilyVaultApi.Repositories.Repository
         }
 
 
-        public async Task<CategoryResponseDto> AddAsync(CreateCategoryDto dto)
+        public async Task<CategoryResponseDto> AddAsync(CreateCategoryDto dto, string? userId)
         {
             var purposeExists = await _context.CategoryPurposes
             .AnyAsync(x => x.CategoryPurposeId == dto.CategoryPurposeId);
@@ -36,6 +36,7 @@ namespace FamilyVaultApi.Repositories.Repository
 
 
             var entity = _mapper.Map<Category>(dto);
+            entity.UserId = userId;
             entity.CreatedAt = DateTime.UtcNow;
             entity.UpdatedAt = DateTime.UtcNow;
 
@@ -48,9 +49,9 @@ namespace FamilyVaultApi.Repositories.Repository
         }
 
 
-        public async Task<PagedResult<CategoryResponseDto>> GetAllAsync(CategoryQueryRequestDto query)
+        public async Task<PagedResult<CategoryResponseDto>> GetAllAsync(CategoryQueryRequestDto query, string? ownerUserId)
         {
-            var q = _context.Categories.AsQueryable();
+            var q = VisibleCategories(ownerUserId);
 
 
             if (!string.IsNullOrWhiteSpace(query.Description))
@@ -82,9 +83,9 @@ namespace FamilyVaultApi.Repositories.Repository
         }
 
 
-        public async Task<List<CategoryResponseDto>> GetLookupAsync()
+        public async Task<List<CategoryResponseDto>> GetLookupAsync(string? ownerUserId)
         {
-            return await _context.Categories
+            return await VisibleCategories(ownerUserId)
                 .OrderBy(x => x.Description)
                 .ProjectTo<CategoryResponseDto>(_mapper.ConfigurationProvider)
                 .ToListAsync();
@@ -120,6 +121,34 @@ namespace FamilyVaultApi.Repositories.Repository
 
             _context.Categories.Remove(entity);
             await _context.SaveChangesAsync();
+        }
+
+        // ownerUserId nulo: só as globais; preenchido: as globais e as desse usuário
+        private IQueryable<Category> VisibleCategories(string? ownerUserId)
+        {
+            if (ownerUserId == null)
+                return _context.Categories.Where(x => x.UserId == null);
+
+            return _context.Categories.Where(x => x.UserId == null || x.UserId == ownerUserId);
+        }
+
+        public async Task<CategoryAccessInfo?> GetAccessInfoAsync(int categoryId)
+        {
+            return await _context.Categories
+                .Where(x => x.CategoryId == categoryId)
+                .Select(x => new CategoryAccessInfo { UserId = x.UserId, CategoryPurposeId = x.CategoryPurposeId })
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<int> CountTransactionsAsync(int categoryId)
+        {
+            return await _context.Transactions.CountAsync(x => x.CategoryId == categoryId);
+        }
+
+        public async Task<bool> IsAvailableToUserAsync(int categoryId, string userId)
+        {
+            return await _context.Categories
+                .AnyAsync(x => x.CategoryId == categoryId && (x.UserId == null || x.UserId == userId));
         }
 
         public async Task<CategoryPurposeCode?> GetPurposeCodeAsync(int categoryId)

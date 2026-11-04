@@ -55,6 +55,11 @@ namespace FamilyVaultApi.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlComputedColumn(b.Property<DateTime?>("UpdatedAt"));
 
+                    b.Property<string>("UserId")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("user_id");
+
                     b.HasKey("CategoryId");
 
                     b.HasIndex("CategoryPurposeId")
@@ -62,6 +67,9 @@ namespace FamilyVaultApi.Migrations
 
                     b.HasIndex("Description")
                         .HasDatabaseName("idx_categories_description");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("idx_categories_user");
 
                     b.ToTable("categories", (string)null);
 
@@ -637,7 +645,15 @@ namespace FamilyVaultApi.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_categories_purpose");
 
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_categories_user");
+
                     b.Navigation("Purpose");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.Transaction", b =>

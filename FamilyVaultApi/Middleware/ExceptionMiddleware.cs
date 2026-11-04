@@ -62,6 +62,11 @@ namespace FamilyVaultApi.Middleware
                 _logger.LogWarning(ex, "Token inválido. TraceId={TraceId}", traceId);
                 await HandleExceptionAsync(context, HttpStatusCode.Unauthorized, ex.Message, traceId);
             }
+            catch (ConflictException ex)
+            {
+                _logger.LogWarning(ex, "Conflito de regra de negócio. TraceId={TraceId}", traceId);
+                await HandleExceptionAsync(context, HttpStatusCode.Conflict, ex.Message, traceId);
+            }
             catch (DbUpdateException ex)
             {
                 _logger.LogWarning(ex, "Conflito ao gravar no banco. TraceId={TraceId}", traceId);
