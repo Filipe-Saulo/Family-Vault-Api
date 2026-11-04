@@ -19,7 +19,7 @@ flowchart LR
 - Categories are **global or personal**; changing or deleting one in use answers **409**
 - Standard error **envelope** (`ApiResponse<T>` with `traceId`), also for 401, 403 and 429
 - **Rate limiting** on auth endpoints
-- **269 unit tests** on the Service layer, run by CI on every push
+- **278 unit tests** on the Service layer and **integration tests** (WebApplicationFactory + in-memory SQLite) for the startup admin seed, run by CI on every push
 
 ---
 
@@ -184,6 +184,12 @@ The `FamilyVaultApi.UnitTests` project (xUnit + Moq + FluentAssertions + Bogus) 
 
 ```bash
 dotnet test FamilyVaultApi.UnitTests
+```
+
+The `FamilyVaultApi.IntegrationTests` project boots the whole API with `WebApplicationFactory` in the `Testing` environment, swapping MySQL for an in-memory SQLite database (schema and seeded roles from `EnsureCreated`), and checks the startup admin seed (`Data/AdminSeeder.cs`). It needs no running database either.
+
+```bash
+dotnet test FamilyVaultApi.IntegrationTests
 ```
 
 There is no lint step; `dotnet build` is the static check (also run by CI).

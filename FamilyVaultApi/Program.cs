@@ -30,26 +30,31 @@ if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32
 
 // Add services to the container.
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-try
+// No ambiente "Testing" o teste de integração registra o próprio banco (SQLite em memória);
+// o AutoDetect abriria conexão com o MySQL aqui.
+if (!builder.Environment.IsEnvironment("Testing"))
 {
-    ServerVersion serverVersion = ServerVersion.AutoDetect(connectionString);  // Automatically detect MySQL version
-    Console.WriteLine("MySQL server version detected successfully.");
+    try
+    {
+        ServerVersion serverVersion = ServerVersion.AutoDetect(connectionString);  // Automatically detect MySQL version
+        Console.WriteLine("MySQL server version detected successfully.");
 
-    builder.Services.AddDbContext<DatabaseContext>(options =>
-      options.UseMySql(connectionString, serverVersion, mysqlOptions =>
-      {
-          mysqlOptions.EnableRetryOnFailure(
-              maxRetryCount: 5, // Retry up to 5 times
-              maxRetryDelay: TimeSpan.FromSeconds(10), // Max delay between retries
-              errorNumbersToAdd: null // Specify error codes to add to the retry list
-          );
-      })
-  );
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"An error occurred while detecting the MySQL version: {ex.Message}");
-    throw;
+        builder.Services.AddDbContext<DatabaseContext>(options =>
+          options.UseMySql(connectionString, serverVersion, mysqlOptions =>
+          {
+              mysqlOptions.EnableRetryOnFailure(
+                  maxRetryCount: 5, // Retry up to 5 times
+                  maxRetryDelay: TimeSpan.FromSeconds(10), // Max delay between retries
+                  errorNumbersToAdd: null // Specify error codes to add to the retry list
+              );
+          })
+      );
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"An error occurred while detecting the MySQL version: {ex.Message}");
+        throw;
+    }
 }
 
 builder.Services.AddHttpContextAccessor();
@@ -266,3 +271,6 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+// Expõe o Program para o WebApplicationFactory dos testes de integração.
+public partial class Program { }
