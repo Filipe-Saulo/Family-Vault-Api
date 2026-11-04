@@ -33,7 +33,16 @@ jobs:
         run: dotnet build --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test FamilyVaultApi.UnitTests --no-build --configuration Release
+        run: dotnet test FamilyVaultApi.UnitTests --no-build --configuration Release --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory coverage
 
       - name: Integration tests
-        run: dotnet test FamilyVaultApi.IntegrationTests --no-build --configuration Release
+        run: dotnet test FamilyVaultApi.IntegrationTests --no-build --configuration Release --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory coverage
+
+      # Junta a cobertura dos dois projetos e mostra o resumo na página do job.
+      # A porcentagem do README é atualizada à mão a partir deste resumo.
+      - name: Coverage report
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.4.4
+          reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage/report -reporttypes:"MarkdownSummaryGithub;TextSummary"
+          cat coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          cat coverage/report/Summary.txt

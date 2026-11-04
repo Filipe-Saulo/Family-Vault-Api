@@ -344,3 +344,6 @@ healthchecksdb
 
 **/logs/*.txt
 .DS_Store
+
+# Cobertura gerada pelo CI/local (coverage.runsettings)
+coverage/
