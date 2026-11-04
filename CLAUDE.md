@@ -58,12 +58,17 @@ EF Core table naming is mixed: Identity/user tables use a `tb_` prefix (`tb_user
 
 ## Authentication
 
-JWT Bearer tokens (10-minute expiry, `JwtSettings:DurationInMinutes`) + refresh tokens backed by ASP.NET Core Identity token provider (database-stored).
+JWT Bearer tokens (10-minute expiry, `JwtSettings:DurationInMinutes`) + refresh tokens backed by ASP.NET Core Identity token provider (database-stored, `tb_user_tokens`).
+
+- **One refresh token per client** (`AuthClient` enum: `Web`, `App`), stored under the purposes `RefreshToken-web` / `RefreshToken-app`, so renewing on one client never invalidates the other. Login and refresh receive the `AuthClient` from the route (`web/*` vs `app/*`).
+- **Refresh validation** (`AccountService.RefreshTokenAsync`): the expired access token is validated by `ITokenService.GetPrincipalFromExpiredToken` (signature, issuer, audience and HmacSha256; lifetime ignored) and the user is loaded by its `uid`. `IIdentityService.VerifyRefreshTokenAsync` requires the incoming refresh token to match the stored one (constant-time compare) **and** pass `VerifyUserTokenAsync` (expiry/security stamp).
+- **Reuse detection**: an invalid or already-rotated refresh token calls `RevokeRefreshTokensAsync` (removes both clients' tokens plus the legacy `RefreshToken` purpose and rotates the security stamp) and answers 401 — clients must never run two refreshes concurrently.
+- **Logout** (`POST /api/logout`, anonymous, `{token}` = access token, possibly expired, validated the same way) revokes the user's sessions on both clients.
 
 - JWT claims: `uid` (user ID), `email` or `phone_number` (whichever the user registered with), `SecurityStamp`, role claims, and permission claims (`AppClaimTypes.Permission`) pulled from the user's role via `RoleManager.GetClaimsAsync`.
 - Web vs. mobile is selected by route, not by inspecting the request: `AccountController` exposes separate `web/login` + `web/refreshtoken` (refresh token set as an `HttpOnly` cookie, stripped from the response body) and `app/login` + `app/refreshtoken` (refresh token returned in the response body) endpoints. `LoginAsync` separately infers Administrator-vs-User login by which of `loginDto.Email`/`loginDto.Phone` is populated (exactly one must be set) — that check is about credential type, not client platform.
 
-Token generation logic is in `Repositories/Repository/AccountRepository.cs`. Note: the JWT Bearer `OnChallenge` handler in `Program.cs` overrides the default response to return a `401` with a custom JSON body (`{"message":"Acesso negado."}`) for any missing/invalid token.
+Access token generation and expired-token validation live in `Services/Service/TokenService.cs`; refresh token storage/verification in `Services/Service/IdentityService.cs`. Note: the JWT Bearer `OnChallenge` handler in `Program.cs` overrides the default response to return a `401` with a custom JSON body (`{"message":"Acesso negado."}`) for any missing/invalid token.
 
 ## Configuration
 
