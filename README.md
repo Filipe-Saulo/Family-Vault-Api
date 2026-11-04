@@ -80,7 +80,7 @@ dotnet run --project FamilyVaultApi
 | POST | `/api/register` | Register new account (Administrator via email, User via phone) |
 | POST | `/api/web/login` | Authenticate; refresh token set as an HttpOnly cookie |
 | POST | `/api/app/login` | Authenticate; refresh token returned in the response body |
-| POST | `/api/logout` | Logout user (clears the refresh token cookie if present, no-op otherwise) |
+| POST | `/api/logout` | Revoke the user's refresh tokens on both clients (web and app) and clear the cookie; body `{token}` (access token, may be expired) when not authenticated |
 | POST | `/api/web/refreshtoken` | Refresh access token; reads/writes the refresh token via cookie |
 | POST | `/api/app/refreshtoken` | Refresh access token; reads/writes the refresh token via request/response body |
 | POST | `/api/resetPassword` | Reset user password |
@@ -91,6 +91,7 @@ dotnet run --project FamilyVaultApi
 |---|---|---|
 | POST | `/api/category` | Administrator, User |
 | GET | `/api/category` | Administrator, User |
+| GET | `/api/category/lookup` | Administrator, User — every category, unpaginated, ordered by description (for selects) |
 | PUT | `/api/category/{id}` | `ManageCategories` permission |
 | DELETE | `/api/category/{id}` | `ManageCategories` permission |
 
@@ -99,9 +100,9 @@ dotnet run --project FamilyVaultApi
 | Method | Endpoint | Roles |
 |---|---|---|
 | POST | `/api/transaction` | Administrator, User |
-| GET | `/api/transaction` | Administrator, User |
-| PUT | `/api/transaction/{id}` | `ManageTransactions` permission |
-| DELETE | `/api/transaction/{id}` | `ManageTransactions` permission |
+| GET | `/api/transaction` | Administrator, User — a `User` without `ManageTransactions` only sees their own; filters `description`, `startDate`/`endDate` (`YYYY-MM-DD`, end date inclusive), category, type, amount range |
+| PUT | `/api/transaction/{id}` | Administrator, `ManageTransactions`, or the owner |
+| DELETE | `/api/transaction/{id}` | Administrator, `ManageTransactions`, or the owner |
 
 ### TransactionType / CategoryPurpose (lookups)
 
@@ -116,7 +117,8 @@ dotnet run --project FamilyVaultApi
 
 | Method | Endpoint | Roles |
 |---|---|---|
-| GET | `/api/User` | `ManageUsers` permission |
+| GET | `/api/User` | `ManageUsers` permission — `search` matches name, e-mail or phone |
+| GET | `/api/User/me` | Administrator, User — the caller's own profile |
 | PUT | `/api/User/{id}` | Administrator, or the user themselves |
 | DELETE | `/api/User/{id}` | Administrator, or the user themselves |
 | GET | `/api/User/{userId}/permissions` | Administrator |
@@ -127,7 +129,7 @@ dotnet run --project FamilyVaultApi
 
 | Method | Endpoint | Roles |
 |---|---|---|
-| GET | `/api/dashboard/summary` | Administrator, User (scoped to own data for `User`) |
+| GET | `/api/dashboard/summary` | Administrator, User (scoped to own data for `User`); `startDate`/`endDate` as `YYYY-MM-DD`, current month by default |
 
 ### Health
 
