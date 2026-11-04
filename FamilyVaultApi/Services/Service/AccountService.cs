@@ -31,32 +31,6 @@ namespace FamilyVaultApi.Services.Service
             _phoneNumberService = phoneNumberService;
         }
 
-        internal class RegisterContext
-        {
-            public string? Email { get; init; }
-            public string? Phone { get; init; }
-
-            public bool IsAdmin => !string.IsNullOrEmpty(Email);
-            public bool IsUser => !string.IsNullOrEmpty(Phone) && string.IsNullOrEmpty(Email);
-        }
-
-        private void ValidateCredentials(RegisterContext ctx, List<IdentityError> errors)
-        {
-            if (string.IsNullOrEmpty(ctx.Email) && string.IsNullOrEmpty(ctx.Phone))
-                errors.Add(new IdentityError { Code = "NoCredentials", Description = "Faltam credenciais." });
-        }
-
-        private async Task ValidateEmailAsync(RegisterContext ctx, List<IdentityError> errors)
-        {
-            if (string.IsNullOrEmpty(ctx.Email)) return;
-
-            if (!EmailValidator.Validar(ctx.Email))
-                errors.Add(new IdentityError { Code = "InvalidEmail", Description = "E-mail inválido." });
-
-            if (await _repository.EmailUserExistsAsync(ctx.Email))
-                errors.Add(new IdentityError { Code = "DuplicateEmail", Description = "E-mail já cadastrado." });
-        }
-
         private async Task<string?> ValidatePhoneAsync(CreateAccountRequestDto dto, List<IdentityError> errors)
         {
             if (string.IsNullOrEmpty(dto.PhoneNumber)) return null;
@@ -76,45 +50,26 @@ namespace FamilyVaultApi.Services.Service
             return formatted;
         }
 
-        private async Task ValidateAdminRegistrationAllowedAsync(List<IdentityError> errors)
-        {
-            if (!await _identityService.AdministratorExistsAsync())
-                return; // bootstrap: primeiro Administrator pode se registrar livremente
-
-            var caller = _httpContextAccessor.HttpContext?.User;
-            var callerIsAdmin = caller?.Identity?.IsAuthenticated == true && caller.IsInRole("Administrator");
-
-            if (!callerIsAdmin)
-                errors.Add(new IdentityError { Code = "AdminRegistrationRestricted", Description = "Apenas um Administrator autenticado pode cadastrar novos administradores." });
-        }
-
         public async Task<IEnumerable<IdentityError>> RegisterAsync(CreateAccountRequestDto dto)
         {
+            // O cadastro público cria só User (telefone); Administrator é criado via POST /api/user
+            if (!string.IsNullOrEmpty(dto.Email))
+                throw new BadRequestException("O cadastro público é feito só com telefone.");
+
             var errors = new List<IdentityError>();
 
-            var ctx = new RegisterContext
-            {
-                Email = dto.Email,
-                Phone = dto.PhoneNumber,
-            };
+            if (string.IsNullOrEmpty(dto.PhoneNumber))
+                errors.Add(new IdentityError { Code = "NoCredentials", Description = "Número de telefone é obrigatório." });
 
-            ValidateCredentials(ctx, errors);
-            await ValidateEmailAsync(ctx, errors);
             var phoneFormated = await ValidatePhoneAsync(dto, errors);
 
             if (dto.Password != dto.PasswordConfirm)
                 errors.Add(new IdentityError { Code = "PasswordMismatch", Description = "As senhas não conferem." });
 
-            if (ctx.IsAdmin)
-                await ValidateAdminRegistrationAllowedAsync(errors);
-
             if (errors.Any())
                 return errors;
 
-            // Decide fluxo
-            return ctx.IsAdmin
-                ? await _identityService.RegisterAdmin(dto)
-                : await _identityService.RegisterUser(dto, phoneFormated);
+            return await _identityService.RegisterUser(dto, phoneFormated);
         }
 
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto, AuthClient client)
@@ -132,8 +87,17 @@ namespace FamilyVaultApi.Services.Service
             if (user == null)
                 throw new UnauthorizedAccessException("Usuário ou senha inválidos.");
 
-            if (!await _identityService.CheckPasswordAsync(user, loginDto.Password))
+            // Conta bloqueada responde igual a senha errada, para não revelar quais contas existem
+            if (await _identityService.IsLockedOutAsync(user))
                 throw new UnauthorizedAccessException("Usuário ou senha inválidos.");
+
+            if (!await _identityService.CheckPasswordAsync(user, loginDto.Password))
+            {
+                await _identityService.AccessFailedAsync(user);
+                throw new UnauthorizedAccessException("Usuário ou senha inválidos.");
+            }
+
+            await _identityService.ResetAccessFailedCountAsync(user);
 
             await _identityService.UpdateLastLoginAsync(user);
 
@@ -188,6 +152,9 @@ namespace FamilyVaultApi.Services.Service
             if (user == null)
                 throw new UnauthorizedAccessException("Usuário não encontrado ou não autorizado.");
 
+            if (await _identityService.IsLockedOutAsync(user))
+                throw new UnauthorizedAccessException("Refresh token inválido ou expirado.");
+
             var isValidRefreshToken = await _identityService.VerifyRefreshTokenAsync(user, client, request.RefreshToken);
             if (!isValidRefreshToken)
             {
@@ -229,28 +196,6 @@ namespace FamilyVaultApi.Services.Service
                 throw new UnauthorizedAccessException("Token inválido ou ausente.");
 
             await _identityService.LogoutAsync(userId);
-        }
-
-        public async Task ResetPasswordAsync(PasswordResetRequestDto dto, ClaimsPrincipal userClaims)
-        {
-            if (dto.Password != dto.PasswordConfirm)
-                throw new BadRequestException("A senha e a confirmação de senha não coincidem.");
-
-            if (string.IsNullOrWhiteSpace(dto.Phone))
-                throw new BadRequestException("Número de telefone é obrigatório.");
-
-            var user = await _repository.FindByPhoneAsync(dto.Phone);
-            if (user == null)
-                throw new NotFoundException("Usuário não encontrado.", dto.Phone);
-
-            bool isLogged = userClaims?.Identity?.IsAuthenticated == true;
-            bool isAdmin = isLogged && userClaims.IsInRole("Administrator");
-            string? uid = isLogged ? userClaims.FindFirst("uid")?.Value : null;
-
-            if (isLogged && !isAdmin && uid != user.Id)
-                throw new SecurityException("Você não tem permissão para acessar este recurso.");
-
-            await _repository.UpdatePasswordAsync(user, dto.Password);
         }
     }
 }

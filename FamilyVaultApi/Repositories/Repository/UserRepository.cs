@@ -110,9 +110,28 @@ namespace FamilyVaultApi.Repositories.Repository
             if (entity == null)
                 throw new KeyNotFoundException("Usuário não encontrado.");
 
+            // Ordem explícita: fk_transactions_category é Restrict e as outras duas FKs são Cascade a partir do usuário.
+            // EnableRetryOnFailure exige que a transação manual rode dentro da execution strategy.
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _context.Database.BeginTransactionAsync();
 
-            _context.Users.Remove(entity);
-            await _context.SaveChangesAsync();
+                await _context.Transactions.Where(t => t.UserId == userId).ExecuteDeleteAsync();
+                await _context.Categories.Where(c => c.UserId == userId).ExecuteDeleteAsync();
+
+                _context.Users.Remove(entity);
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+            });
+        }
+
+        public async Task<bool> IsLastAdministratorAsync(string userId)
+        {
+            var administrators = await _userManager.GetUsersInRoleAsync("Administrator");
+
+            return administrators.Count == 1 && administrators[0].Id == userId;
         }
 
         public async Task<List<PermissionCode>> GetPermissionsAsync(string userId)

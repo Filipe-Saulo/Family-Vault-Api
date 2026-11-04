@@ -10,6 +10,9 @@ namespace FamilyVaultApi.Models.Dto.Responses.Category
 
         public CategoryPurposeSimpleDto Purpose { get; set; }
 
+        // Verdadeiro quando a categoria não pertence a um usuário (criada por Administrator)
+        public bool IsGlobal { get; set; }
+
 
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }

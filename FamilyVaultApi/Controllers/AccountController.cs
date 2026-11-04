@@ -109,30 +109,43 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<AuthResponseDto>.Ok(responseDto));
         }
 
-        [HttpPost("resetPassword")]
-        public async Task<ActionResult<ApiResponse<object>>> ResetPassword([FromBody] PasswordResetRequestDto passwordResetDto)
-        {
-            await _accountService.ResetPasswordAsync(passwordResetDto, User);
-            return Ok(ApiResponse<object>.Ok(null, "Senha alterada com sucesso"));
-        }
-
         private void SetRefreshTokenCookie(string token)
         {
+            DeleteLegacyRefreshTokenCookie();
             Response.Cookies.Append("refreshToken", token, new CookieOptions
             {
                 HttpOnly = true,
                 Secure = true,
-                SameSite = SameSiteMode.None,
+                // The web panel reaches the API through its own origin (Vite proxy in dev), so the
+                // cookie is first-party: Lax is enough and Path keeps it off every other request.
+                SameSite = SameSiteMode.Lax,
+                Path = "/api",
+                Expires = DateTimeOffset.UtcNow.AddDays(7),
             });
         }
 
-        private void ClearRefreshTokenCookie()
+        // Before the cookie moved to Path=/api it was issued with Path=/ and SameSite=None; a browser that
+        // still holds that one would send two refreshToken cookies, so it is always removed.
+        private void DeleteLegacyRefreshTokenCookie()
         {
             Response.Cookies.Delete("refreshToken", new CookieOptions
             {
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.None,
+                Path = "/",
+            });
+        }
+
+        private void ClearRefreshTokenCookie()
+        {
+            DeleteLegacyRefreshTokenCookie();
+            Response.Cookies.Delete("refreshToken", new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                Path = "/api",
             });
         }
     }

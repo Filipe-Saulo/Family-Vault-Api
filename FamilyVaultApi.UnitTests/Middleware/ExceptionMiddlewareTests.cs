@@ -1,3 +1,4 @@
+using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Middleware;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
@@ -50,6 +51,16 @@ namespace FamilyVaultApi.UnitTests.Middleware
             status.Should().Be(409);
             using var json = System.Text.Json.JsonDocument.Parse(body);
             json.RootElement.GetProperty("message").GetString().Should().Be("Operação conflita com registros relacionados.");
+        }
+
+        [Fact]
+        public async Task InvokeAsync_WhenConflictException_ShouldReturn409WithExceptionMessage()
+        {
+            var (status, body) = await InvokeWithBodyAsync(new ConflictException("Categoria possui 3 transações."));
+
+            status.Should().Be(409);
+            using var json = System.Text.Json.JsonDocument.Parse(body);
+            json.RootElement.GetProperty("message").GetString().Should().Be("Categoria possui 3 transações.");
         }
     }
 }

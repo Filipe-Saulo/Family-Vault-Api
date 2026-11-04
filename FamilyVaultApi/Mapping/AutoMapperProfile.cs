@@ -27,6 +27,7 @@ namespace FamilyVaultApi.Mapping
                     opt => opt.MapFrom(src => src.Id));
 
             CreateMap<CreateCategoryDto, Category>()
+                .ForMember(d => d.UserId, opt => opt.Ignore())
                 .ForMember(d => d.CreatedAt, opt => opt.Ignore())
                 .ForMember(d => d.UpdatedAt, opt => opt.Ignore());
 
@@ -37,7 +38,8 @@ namespace FamilyVaultApi.Mapping
 
 
             CreateMap<Category, CategoryResponseDto>()
-            .ForMember(d => d.Purpose, opt => opt.MapFrom(src => src.Purpose));
+            .ForMember(d => d.Purpose, opt => opt.MapFrom(src => src.Purpose))
+            .ForMember(d => d.IsGlobal, opt => opt.MapFrom(src => src.UserId == null));
 
             CreateMap<CreateTransactionDto, Transaction>()
                 .ForMember(d => d.CreatedAt, opt => opt.Ignore())

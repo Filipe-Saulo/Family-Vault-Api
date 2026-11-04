@@ -18,7 +18,7 @@ Supports **web and mobile clients**.
 - Serilog logging (console sink + request logging)
 - Swagger / OpenAPI documentation
 - Health check for MySQL at `/health`
-- Rate limiting on auth endpoints (login, register, reset password, refresh token)
+- Rate limiting on auth endpoints (login, register, password forgot/reset, refresh token)
 - Automated test suite (xUnit) covering the Service layer, run on every push via CI
 - Multi-platform: web apps and mobile apps
 
@@ -60,13 +60,25 @@ cd FamilyVaultApi
 dotnet ef database update
 ```
 
-4. Run the API:
+4. Configure the first Administrator (only needed on an empty database; the account is created at startup when no
+   Administrator exists). Use user-secrets, never `appsettings.json`:
+
+```bash
+cd FamilyVaultApi
+dotnet user-secrets set "AdminSeed:Email" "admin@example.com"
+dotnet user-secrets set "AdminSeed:Password" "ChangeMe123"
+```
+
+Public sign-up (`POST /api/register`) only creates regular users by phone; further Administrators are created by an
+Administrator through `POST /api/User`.
+
+5. Run the API:
 
 ```bash
 dotnet run --project FamilyVaultApi
 ```
 
-5. Access Swagger UI:
+6. Access Swagger UI:
 
 - `http://localhost:5090/swagger`
 - `https://localhost:7072/swagger`
@@ -77,23 +89,27 @@ dotnet run --project FamilyVaultApi
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/register` | Register new account (Administrator via email, User via phone) |
-| POST | `/api/web/login` | Authenticate; refresh token set as an HttpOnly cookie |
+| POST | `/api/register` | Public sign-up of a regular User, by phone only (an e-mail is rejected) |
+| POST | `/api/web/login` | Authenticate; refresh token set as an HttpOnly, `SameSite=Lax`, `Path=/api` cookie (the web panel calls the API through its own origin via a proxy) |
 | POST | `/api/app/login` | Authenticate; refresh token returned in the response body |
 | POST | `/api/logout` | Revoke the user's refresh tokens on both clients (web and app) and clear the cookie; body `{token}` (access token, may be expired) when not authenticated |
 | POST | `/api/web/refreshtoken` | Refresh access token; reads/writes the refresh token via cookie |
 | POST | `/api/app/refreshtoken` | Refresh access token; reads/writes the refresh token via request/response body |
-| POST | `/api/resetPassword` | Reset user password |
+| POST | `/api/password/forgot` | Anonymous; body `{phone}`; always answers 202 (never reveals whether the account exists) and sends a 6-digit code by phone |
+| POST | `/api/password/reset` | Anonymous; body `{phone, code, password, passwordConfirm}`; invalid/expired code or locked account -> 400; a wrong code counts as a failed attempt; unlocks the account and revokes its sessions |
+| POST | `/api/password/change` | Administrator, User; body `{currentPassword, password, passwordConfirm}`; revokes the sessions (log in again) |
+
+> There is no SMS provider yet: `LoggingVerificationCodeSender` writes the recovery code to the log (`Código de recuperação para ***1234: 123456`) **only in Development**; in other environments it logs just that a code was generated.
 
 ### Category
 
 | Method | Endpoint | Roles |
 |---|---|---|
-| POST | `/api/category` | Administrator, User |
-| GET | `/api/category` | Administrator, User |
+| POST | `/api/category` | Administrator (creates a global category), User (creates a personal one) |
+| GET | `/api/category` | Administrator (global categories), User (global + own) |
 | GET | `/api/category/lookup` | Administrator, User — every category, unpaginated, ordered by description (for selects) |
-| PUT | `/api/category/{id}` | `ManageCategories` permission |
-| DELETE | `/api/category/{id}` | `ManageCategories` permission |
+| PUT | `/api/category/{id}` | Global: Administrator or `ManageCategories`; personal: its owner too. 409 when changing the purpose of a category in use |
+| DELETE | `/api/category/{id}` | Same as PUT; 409 when the category has transactions |
 
 ### Transaction
 
@@ -118,9 +134,11 @@ dotnet run --project FamilyVaultApi
 | Method | Endpoint | Roles |
 |---|---|---|
 | GET | `/api/User` | `ManageUsers` permission — `search` matches name, e-mail or phone |
+| POST | `/api/User` | Administrator — creates an Administrator (e-mail) or a User (phone), `role` in the body |
 | GET | `/api/User/me` | Administrator, User — the caller's own profile |
 | PUT | `/api/User/{id}` | Administrator, or the user themselves |
-| DELETE | `/api/User/{id}` | Administrator, or the user themselves |
+| DELETE | `/api/User/{id}` | Administrator, or the user themselves; 409 for the last Administrator |
+| POST | `/api/User/{id}/password` | Administrator — sets a new password for the user (body `{password, passwordConfirm}`) and revokes their sessions |
 | GET | `/api/User/{userId}/permissions` | Administrator |
 | POST | `/api/User/{userId}/permissions` | Administrator |
 | DELETE | `/api/User/{userId}/permissions/{permission}` | Administrator |

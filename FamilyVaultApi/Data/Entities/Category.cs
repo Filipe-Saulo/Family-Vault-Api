@@ -7,9 +7,11 @@
         public int CategoryPurposeId { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public string? UserId { get; set; }
 
         // Navigation properties
         public virtual CategoryPurpose Purpose { get; set; }
+        public virtual User? User { get; set; }
         public virtual ICollection<Transaction> Transactions { get; set; }
     }
 }
