@@ -1,10 +1,13 @@
 using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace FamilyVaultApi.Services.Service
 {
@@ -14,7 +17,9 @@ namespace FamilyVaultApi.Services.Service
         private readonly RoleManager<IdentityRole> _roleManager;
 
         private readonly string _loginProvider = TokenOptions.DefaultProvider;
-        private readonly string _refreshTokenPurpose = "RefreshToken";
+        private const string _legacyRefreshTokenPurpose = "RefreshToken";
+        private const string _webRefreshTokenPurpose = "RefreshToken-web";
+        private const string _appRefreshTokenPurpose = "RefreshToken-app";
 
         public IdentityService(UserManager<User> userManager, RoleManager<IdentityRole> roleManager)
         {
@@ -62,20 +67,47 @@ namespace FamilyVaultApi.Services.Service
             return await _roleManager.GetClaimsAsync(role);
         }
 
-        public async Task<string> CreateRefreshTokenAsync(User user)
+        private static string GetRefreshTokenPurpose(AuthClient client)
         {
-            await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _refreshTokenPurpose);
+            return client == AuthClient.Web ? _webRefreshTokenPurpose : _appRefreshTokenPurpose;
+        }
 
-            var newRefreshToken = await _userManager.GenerateUserTokenAsync(user, _loginProvider, _refreshTokenPurpose);
+        public async Task<string> CreateRefreshTokenAsync(User user, AuthClient client)
+        {
+            var purpose = GetRefreshTokenPurpose(client);
 
-            await _userManager.SetAuthenticationTokenAsync(user, _loginProvider, _refreshTokenPurpose, newRefreshToken);
+            await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, purpose);
+
+            var newRefreshToken = await _userManager.GenerateUserTokenAsync(user, _loginProvider, purpose);
+
+            await _userManager.SetAuthenticationTokenAsync(user, _loginProvider, purpose, newRefreshToken);
 
             return newRefreshToken;
         }
 
-        public async Task<bool> VerifyRefreshTokenAsync(User user, string refreshToken)
+        public async Task<bool> VerifyRefreshTokenAsync(User user, AuthClient client, string refreshToken)
         {
-            return await _userManager.VerifyUserTokenAsync(user, _loginProvider, _refreshTokenPurpose, refreshToken);
+            var purpose = GetRefreshTokenPurpose(client);
+
+            var storedToken = await _userManager.GetAuthenticationTokenAsync(user, _loginProvider, purpose);
+            if (storedToken == null || string.IsNullOrEmpty(refreshToken))
+                return false;
+
+            var storedBytes = Encoding.UTF8.GetBytes(storedToken);
+            var receivedBytes = Encoding.UTF8.GetBytes(refreshToken);
+            if (storedBytes.Length != receivedBytes.Length
+                || !CryptographicOperations.FixedTimeEquals(storedBytes, receivedBytes))
+                return false;
+
+            return await _userManager.VerifyUserTokenAsync(user, _loginProvider, purpose, refreshToken);
+        }
+
+        public async Task RevokeRefreshTokensAsync(User user)
+        {
+            await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _webRefreshTokenPurpose);
+            await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _appRefreshTokenPurpose);
+            await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _legacyRefreshTokenPurpose);
+            await _userManager.UpdateSecurityStampAsync(user);
         }
 
         public async Task<User?> FindByNameAsync(string username)
@@ -83,9 +115,9 @@ namespace FamilyVaultApi.Services.Service
             return await _userManager.FindByNameAsync(username);
         }
 
-        public async Task RevokeSecurityStampAsync(User user)
+        public async Task<User?> FindByIdAsync(string userId)
         {
-            await _userManager.UpdateSecurityStampAsync(user);
+            return await _userManager.FindByIdAsync(userId);
         }
 
         public async Task<IEnumerable<IdentityError>> RegisterAdmin(CreateAccountRequestDto createAccountDto)
@@ -161,8 +193,7 @@ namespace FamilyVaultApi.Services.Service
             if (user == null)
                 throw new NotFoundException("Usuário não encontrado.", userId);
 
-            await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _refreshTokenPurpose);
-            await _userManager.UpdateSecurityStampAsync(user);
+            await RevokeRefreshTokensAsync(user);
         }
 
         public async Task<bool> AdministratorExistsAsync()

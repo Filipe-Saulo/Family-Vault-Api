@@ -34,6 +34,11 @@ namespace FamilyVaultApi.Services.Service
             return await _categoryRepository.GetAllAsync(query);
         }
 
+        public async Task<List<CategoryResponseDto>> GetLookupAsync()
+        {
+            return await _categoryRepository.GetLookupAsync();
+        }
+
         public async Task<CategoryResponseDto> UpdateAsync(int id, UpdateCategoryDto dto)
         {
             if (dto == null)

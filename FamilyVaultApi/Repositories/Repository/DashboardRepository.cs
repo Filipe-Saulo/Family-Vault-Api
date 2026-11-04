@@ -24,10 +24,16 @@ namespace FamilyVaultApi.Repositories.Repository
                 q = q.Where(x => x.UserId == query.UserId);
 
             if (query.StartDate.HasValue)
-                q = q.Where(x => x.TransactionDate >= query.StartDate.Value);
+            {
+                var startDate = query.StartDate.Value.ToDateTime(TimeOnly.MinValue);
+                q = q.Where(x => x.TransactionDate >= startDate);
+            }
 
             if (query.EndDate.HasValue)
-                q = q.Where(x => x.TransactionDate <= query.EndDate.Value);
+            {
+                var endDate = query.EndDate.Value.AddDays(1).ToDateTime(TimeOnly.MinValue);
+                q = q.Where(x => x.TransactionDate < endDate);
+            }
 
             var expenseCode = TransactionTypeCode.Expense.ToString().ToLowerInvariant();
             var incomeCode = TransactionTypeCode.Income.ToString().ToLowerInvariant();

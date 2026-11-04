@@ -30,6 +30,15 @@ namespace FamilyVaultApi.Services.Service
             return await _userRepository.GetAllUsersAsync(query);
         }
 
+        public async Task<UserResponseDto> GetMeAsync(ClaimsPrincipal userClaims)
+        {
+            var currentUserId = userClaims?.FindFirst("uid")?.Value;
+            if (string.IsNullOrWhiteSpace(currentUserId))
+                throw new UnauthorizedAccessException("Usuário não autenticado.");
+
+            return await _userRepository.GetByIdAsync(currentUserId);
+        }
+
         public async Task<UserResponseDto> UpdateUserAsync(string userId, UpdateUserDto dto, ClaimsPrincipal userClaims)
         {
             if (dto == null)

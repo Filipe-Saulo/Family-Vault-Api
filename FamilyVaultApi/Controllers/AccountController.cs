@@ -2,6 +2,7 @@ using FamilyVaultApi.Common;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
 using FamilyVaultApi.Models.Dto.Responses.Account;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Mvc;
 
@@ -38,7 +39,7 @@ namespace FamilyVaultApi.Controllers
         [HttpPost("web/login")]
         public async Task<ActionResult<ApiResponse<AuthResponseDto>>> LoginWeb([FromBody] LoginRequestDto loginDto)
         {
-            var authResponse = await _accountService.LoginAsync(loginDto);
+            var authResponse = await _accountService.LoginAsync(loginDto, AuthClient.Web);
             SetRefreshTokenCookie(authResponse.RefreshToken);
 
             return Ok(ApiResponse<AuthResponseDto>.Ok(
@@ -55,7 +56,7 @@ namespace FamilyVaultApi.Controllers
         [HttpPost("app/login")]
         public async Task<ActionResult<ApiResponse<AuthResponseDto>>> LoginApp([FromBody] LoginRequestDto loginDto)
         {
-            var authResponse = await _accountService.LoginAsync(loginDto);
+            var authResponse = await _accountService.LoginAsync(loginDto, AuthClient.App);
             return Ok(ApiResponse<AuthResponseDto>.Ok(authResponse, "Login realizado com sucesso."));
         }
 
@@ -92,7 +93,7 @@ namespace FamilyVaultApi.Controllers
             {
                 Token = accessToken,
                 RefreshToken = refreshToken
-            });
+            }, isWeb ? AuthClient.Web : AuthClient.App);
 
             var responseDto = new AuthResponseDto
             {

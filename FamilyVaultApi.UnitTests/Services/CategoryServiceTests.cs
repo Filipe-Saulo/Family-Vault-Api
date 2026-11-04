@@ -145,5 +145,24 @@ namespace FamilyVaultApi.UnitTests.Services
 
             _repositoryMock.Verify(x => x.DeleteAsync(7), Times.Once);
         }
+
+        // -- GetLookupAsync ----------------------------------------------------
+
+        [Fact]
+        public async Task GetLookupAsync_ShouldReturnRepositoryList()
+        {
+            var expected = new List<CategoryResponseDto>
+            {
+                new() { CategoryId = 1, Description = "Mercado" },
+                new() { CategoryId = 2, Description = "Salario" }
+            };
+
+            _repositoryMock.Setup(x => x.GetLookupAsync()).ReturnsAsync(expected);
+
+            var result = await _service.GetLookupAsync();
+
+            result.Should().BeEquivalentTo(expected);
+            _repositoryMock.Verify(x => x.GetLookupAsync(), Times.Once);
+        }
     }
 }

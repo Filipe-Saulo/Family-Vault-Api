@@ -54,11 +54,20 @@ namespace FamilyVaultApi.Repositories.Repository
             if (query.TransactionTypeId.HasValue)
                 q = q.Where(x => x.TransactionTypeId == query.TransactionTypeId);
 
+            if (!string.IsNullOrWhiteSpace(query.Description))
+                q = q.Where(x => x.Description.Contains(query.Description));
+
             if (query.StartDate.HasValue)
-                q = q.Where(x => x.TransactionDate >= query.StartDate.Value);
+            {
+                var startDate = query.StartDate.Value.ToDateTime(TimeOnly.MinValue);
+                q = q.Where(x => x.TransactionDate >= startDate);
+            }
 
             if (query.EndDate.HasValue)
-                q = q.Where(x => x.TransactionDate <= query.EndDate.Value);
+            {
+                var endDate = query.EndDate.Value.AddDays(1).ToDateTime(TimeOnly.MinValue);
+                q = q.Where(x => x.TransactionDate < endDate);
+            }
 
             if (query.MinAmount.HasValue)
                 q = q.Where(x => x.Amount >= query.MinAmount.Value);

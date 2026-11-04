@@ -29,6 +29,14 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<PagedResult<UserResponseDto>>.Ok(result));
         }
 
+        [HttpGet("me")]
+        [Authorize(Roles = "Administrator, User")]
+        public async Task<ActionResult<ApiResponse<UserResponseDto>>> GetMe()
+        {
+            var result = await _userService.GetMeAsync(User);
+            return Ok(ApiResponse<UserResponseDto>.Ok(result));
+        }
+
         [HttpPut("{id}")]
         [Authorize(Roles = "Administrator, User")]
         public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateUser([FromRoute] string id, [FromBody] UpdateUserDto dto)

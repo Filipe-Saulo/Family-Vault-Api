@@ -8,6 +8,7 @@ namespace FamilyVaultApi.Repositories.IRepository
     public interface IUserRepository
     {
         Task<PagedResult<UserResponseDto>> GetAllUsersAsync(UserQueryRequestDto query);
+        Task<UserResponseDto> GetByIdAsync(string userId);
         Task<UserResponseDto> UpdateAsync(string userId, UpdateUserDto dto);
         Task DeleteAsync(string userId);
         Task<List<PermissionCode>> GetPermissionsAsync(string userId);

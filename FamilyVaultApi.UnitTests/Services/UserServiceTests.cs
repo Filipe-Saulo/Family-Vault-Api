@@ -1,3 +1,4 @@
+using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.User;
 using FamilyVaultApi.Models.Dto.Responses.User;
 using FamilyVaultApi.Models.Internal;
@@ -192,6 +193,64 @@ namespace FamilyVaultApi.UnitTests.Services
             await _service.RevokePermissionAsync("user-1", PermissionCode.ManageCategories);
 
             _repositoryMock.Verify(x => x.RevokePermissionAsync("user-1", PermissionCode.ManageCategories), Times.Once);
+        }
+
+        // -- GetUsersAsync: Search ---------------------------------------------
+
+        [Fact]
+        public async Task GetUsersAsync_WhenSearchProvided_ShouldPassItUnchangedToRepository()
+        {
+            var query = new UserQueryRequestDto { PageNumber = 1, PageSize = 20, Search = "maria" };
+            UserQueryRequestDto? received = null;
+
+            _repositoryMock
+                .Setup(x => x.GetAllUsersAsync(It.IsAny<UserQueryRequestDto>()))
+                .Callback<UserQueryRequestDto>(q => received = q)
+                .ReturnsAsync(new PagedResult<UserResponseDto>());
+
+            await _service.GetUsersAsync(query);
+
+            received.Should().NotBeNull();
+            received!.Search.Should().Be("maria");
+        }
+
+        // -- GetMeAsync --------------------------------------------------------
+
+        [Fact]
+        public async Task GetMeAsync_WhenPrincipalHasNoUid_ShouldThrowUnauthorizedAccessException()
+        {
+            Func<Task> act = () => _service.GetMeAsync(ClaimsPrincipalTestHelper.CreateUnauthenticated());
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            _repositoryMock.VerifyNoOtherCalls();
+        }
+
+        [Fact]
+        public async Task GetMeAsync_WhenRepositoryReportsUserMissing_ShouldPropagateNotFoundException()
+        {
+            // O NotFoundException nasce no repository (GetByIdAsync); o service so propaga.
+            _repositoryMock
+                .Setup(x => x.GetByIdAsync("user-1"))
+                .ThrowsAsync(new NotFoundException("Usuario", "user-1"));
+
+            Func<Task> act = () => _service.GetMeAsync(ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            await act.Should().ThrowAsync<NotFoundException>();
+        }
+
+        [Fact]
+        public async Task GetMeAsync_WhenUserExists_ShouldReturnOnlyTheTokenUser()
+        {
+            var me = new UserResponseDto { UserId = "user-1", FirstName = "Ana" };
+            var other = new UserResponseDto { UserId = "user-2", FirstName = "Beto" };
+
+            _repositoryMock.Setup(x => x.GetByIdAsync("user-1")).ReturnsAsync(me);
+            _repositoryMock.Setup(x => x.GetByIdAsync("user-2")).ReturnsAsync(other);
+
+            var result = await _service.GetMeAsync(ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            result.Should().Be(me);
+            _repositoryMock.Verify(x => x.GetByIdAsync("user-2"), Times.Never);
         }
     }
 }

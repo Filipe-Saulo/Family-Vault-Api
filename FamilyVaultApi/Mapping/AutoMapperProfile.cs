@@ -32,7 +32,8 @@ namespace FamilyVaultApi.Mapping
 
 
 
-            CreateMap<CategoryPurpose, CategoryPurposeSimpleDto>();
+            CreateMap<CategoryPurpose, CategoryPurposeSimpleDto>()
+                .ForMember(d => d.Code, opt => opt.MapFrom(src => Enum.Parse<CategoryPurposeCode>(src.Code, true)));
 
 
             CreateMap<Category, CategoryResponseDto>()
@@ -43,12 +44,14 @@ namespace FamilyVaultApi.Mapping
                 .ForMember(d => d.UpdatedAt, opt => opt.Ignore());
 
 
-            CreateMap<CategoryPurpose, CategoryPurposeSimpleDto>();
+            CreateMap<CategoryPurpose, CategoryPurposeSimpleDto>()
+                .ForMember(d => d.Code, opt => opt.MapFrom(src => Enum.Parse<CategoryPurposeCode>(src.Code, true)));
             CreateMap<Category, CategorySimpleDto>()
             .ForMember(d => d.Purpose, opt => opt.MapFrom(src => src.Purpose));
 
 
-            CreateMap<TransactionType, TransactionTypeSimpleDto>();
+            CreateMap<TransactionType, TransactionTypeSimpleDto>()
+                .ForMember(d => d.Code, opt => opt.MapFrom(src => Enum.Parse<TransactionTypeCode>(src.Code, true)));
 
 
             CreateMap<Transaction, TransactionResponseDto>()

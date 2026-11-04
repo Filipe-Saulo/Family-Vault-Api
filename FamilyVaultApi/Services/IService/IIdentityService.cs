@@ -1,4 +1,5 @@
 using FamilyVaultApi.Data.Entities;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Models.Dto.Requests.Account;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
@@ -13,10 +14,11 @@ namespace FamilyVaultApi.Services.IService
         Task<(bool IsAdmin, bool IsUser)> GetRolesAsync(User user);
         Task<IList<Claim>> GetUserClaimsAsync(User user);
         Task<IList<Claim>> GetRoleClaimsAsync(string roleName);
-        Task<string> CreateRefreshTokenAsync(User user);
-        Task<bool> VerifyRefreshTokenAsync(User user, string refreshToken);
+        Task<string> CreateRefreshTokenAsync(User user, AuthClient client);
+        Task<bool> VerifyRefreshTokenAsync(User user, AuthClient client, string refreshToken);
+        Task RevokeRefreshTokensAsync(User user);
         Task<User?> FindByNameAsync(string username);
-        Task RevokeSecurityStampAsync(User user);
+        Task<User?> FindByIdAsync(string userId);
         Task<IEnumerable<IdentityError>> RegisterUser(CreateAccountRequestDto createAccountDto, string phone);
         Task<IEnumerable<IdentityError>> RegisterAdmin(CreateAccountRequestDto createAccountDto);
         Task LogoutAsync(string userId);
