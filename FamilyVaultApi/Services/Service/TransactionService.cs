@@ -39,8 +39,13 @@ namespace FamilyVaultApi.Services.Service
             {
                 throw new BadRequestException("Informe o UserId da transação.");
             }
+            else if (!await _repository.UserExistsAsync(dto.UserId))
+            {
+                throw new NotFoundException("Usuário", dto.UserId);
+            }
 
             await EnsureCategoryAllowsTransactionTypeAsync(dto.CategoryId, dto.TransactionTypeId);
+            await EnsureCategoryAvailableToUserAsync(dto.CategoryId, dto.UserId);
 
             return await _repository.AddAsync(dto);
         }
@@ -76,6 +81,12 @@ namespace FamilyVaultApi.Services.Service
             await EnsureCanModifyTransactionAsync(id, userClaims);
             await EnsureCategoryAllowsTransactionTypeAsync(dto.CategoryId, dto.TransactionTypeId);
 
+            var ownerUserId = await _repository.GetOwnerUserIdAsync(id);
+            if (ownerUserId == null)
+                throw new NotFoundException("Transaction", id);
+
+            await EnsureCategoryAvailableToUserAsync(dto.CategoryId, ownerUserId);
+
             return await _repository.UpdateAsync(id, dto);
         }
 
@@ -100,6 +111,13 @@ namespace FamilyVaultApi.Services.Service
             var callerId = userClaims.FindFirst("uid")?.Value;
             if (callerId != ownerUserId)
                 throw new SecurityException("Você não tem permissão para alterar esta transação.");
+        }
+
+        // A categoria tem de ser global ou do usuário dono da transação
+        private async Task EnsureCategoryAvailableToUserAsync(int categoryId, string? ownerUserId)
+        {
+            if (string.IsNullOrEmpty(ownerUserId) || !await _categoryRepository.IsAvailableToUserAsync(categoryId, ownerUserId))
+                throw new BadRequestException("Categoria não disponível para este usuário.");
         }
 
         private async Task EnsureCategoryAllowsTransactionTypeAsync(int categoryId, int transactionTypeId)

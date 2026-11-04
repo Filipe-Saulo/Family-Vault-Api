@@ -30,8 +30,60 @@ namespace FamilyVaultApi.UnitTests.Services
             _categoryRepositoryMock.Setup(x => x.GetPurposeCodeAsync(It.IsAny<int>())).ReturnsAsync(CategoryPurposeCode.Expense);
             _transactionTypeRepositoryMock.Setup(x => x.GetCodeAsync(It.IsAny<int>())).ReturnsAsync(TransactionTypeCode.Expense);
             _repositoryMock.Setup(x => x.GetOwnerUserIdAsync(It.IsAny<int>())).ReturnsAsync("user-1");
+            _repositoryMock.Setup(x => x.UserExistsAsync(It.IsAny<string>())).ReturnsAsync(true);
+            _categoryRepositoryMock.Setup(x => x.IsAvailableToUserAsync(It.IsAny<int>(), It.IsAny<string>())).ReturnsAsync(true);
 
             _service = new TransactionService(_repositoryMock.Object, _categoryRepositoryMock.Object, _transactionTypeRepositoryMock.Object);
+        }
+
+        // ── Categoria disponível / usuário existente ─────────────────────────
+
+        [Fact]
+        public async Task CreateAsync_AsAdmin_WhenTargetUserDoesNotExist_ShouldThrowNotFoundException()
+        {
+            var dto = CreateTransactionDtoBuilder.New().WithUserId("ghost").Build();
+            _repositoryMock.Setup(x => x.UserExistsAsync("ghost")).ReturnsAsync(false);
+
+            Func<Task> act = () => _service.CreateAsync(dto, ClaimsPrincipalTestHelper.CreateAdmin());
+
+            await act.Should().ThrowAsync<NotFoundException>();
+            _repositoryMock.Verify(x => x.AddAsync(It.IsAny<CreateTransactionDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateAsync_WhenCategoryIsNotGlobalNorOwnedByTheUser_ShouldThrowBadRequestException()
+        {
+            var dto = CreateTransactionDtoBuilder.New().WithCategoryId(10).Build();
+            _categoryRepositoryMock.Setup(x => x.IsAvailableToUserAsync(10, "user-1")).ReturnsAsync(false);
+
+            Func<Task> act = () => _service.CreateAsync(dto, ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            await act.Should().ThrowAsync<BadRequestException>();
+            _repositoryMock.Verify(x => x.AddAsync(It.IsAny<CreateTransactionDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateAsync_AsAdmin_WhenCategoryIsNotAvailableToTargetUser_ShouldThrowBadRequestException()
+        {
+            var dto = CreateTransactionDtoBuilder.New().WithUserId("target-user").WithCategoryId(10).Build();
+            _categoryRepositoryMock.Setup(x => x.IsAvailableToUserAsync(10, "target-user")).ReturnsAsync(false);
+
+            Func<Task> act = () => _service.CreateAsync(dto, ClaimsPrincipalTestHelper.CreateAdmin());
+
+            await act.Should().ThrowAsync<BadRequestException>();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_WhenCategoryIsNotAvailableToTransactionOwner_ShouldThrowBadRequestException()
+        {
+            var dto = UpdateTransactionDtoBuilder.New().WithCategoryId(10).Build();
+            _repositoryMock.Setup(x => x.GetOwnerUserIdAsync(9)).ReturnsAsync("user-1");
+            _categoryRepositoryMock.Setup(x => x.IsAvailableToUserAsync(10, "user-1")).ReturnsAsync(false);
+
+            Func<Task> act = () => _service.UpdateAsync(9, dto, ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            await act.Should().ThrowAsync<BadRequestException>();
+            _repositoryMock.Verify(x => x.UpdateAsync(It.IsAny<int>(), It.IsAny<UpdateTransactionDto>()), Times.Never);
         }
 
         // ── CreateAsync ──────────────────────────────────────────────────────
@@ -260,7 +312,7 @@ namespace FamilyVaultApi.UnitTests.Services
 
             result.Should().Be(expected);
             _repositoryMock.Verify(x => x.UpdateAsync(9, dto), Times.Once);
-            _repositoryMock.Verify(x => x.GetOwnerUserIdAsync(It.IsAny<int>()), Times.Never);
+            _categoryRepositoryMock.Verify(x => x.IsAvailableToUserAsync(dto.CategoryId, "user-1"), Times.Once);
         }
 
         [Fact]
@@ -312,7 +364,7 @@ namespace FamilyVaultApi.UnitTests.Services
             var result = await _service.UpdateAsync(9, dto, ClaimsPrincipalTestHelper.CreateUserWithPermission("user-1", PermissionCode.ManageTransactions));
 
             result.Should().Be(expected);
-            _repositoryMock.Verify(x => x.GetOwnerUserIdAsync(It.IsAny<int>()), Times.Never);
+            _categoryRepositoryMock.Verify(x => x.IsAvailableToUserAsync(dto.CategoryId, "other-user"), Times.Once);
         }
 
         [Fact]

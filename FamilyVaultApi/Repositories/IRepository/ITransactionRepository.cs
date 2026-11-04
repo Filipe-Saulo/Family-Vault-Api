@@ -11,5 +11,6 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<TransactionResponseDto> UpdateAsync(int id, UpdateTransactionDto dto);
         Task DeleteAsync(int id);
         Task<string?> GetOwnerUserIdAsync(int transactionId);
+        Task<bool> UserExistsAsync(string userId);
     }
 }

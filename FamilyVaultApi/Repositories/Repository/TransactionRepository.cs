@@ -38,7 +38,7 @@ namespace FamilyVaultApi.Repositories.Repository
             _context.Transactions.Add(entity);
             await _context.SaveChangesAsync();
 
-            return _mapper.Map<TransactionResponseDto>(entity);
+            return await GetResponseByIdAsync(entity.TransactionId);
         }
 
         public async Task<PagedResult<TransactionResponseDto>> GetAllAsync(TransactionQueryRequestDto query)
@@ -114,7 +114,7 @@ namespace FamilyVaultApi.Repositories.Repository
 
             await _context.SaveChangesAsync();
 
-            return _mapper.Map<TransactionResponseDto>(entity);
+            return await GetResponseByIdAsync(entity.TransactionId);
         }
 
         public async Task DeleteAsync(int id)
@@ -125,6 +125,20 @@ namespace FamilyVaultApi.Repositories.Repository
 
             _context.Transactions.Remove(entity);
             await _context.SaveChangesAsync();
+        }
+
+        // Recarrega pelo id com a mesma projeção da listagem (Category e TransactionType preenchidos)
+        private async Task<TransactionResponseDto> GetResponseByIdAsync(int transactionId)
+        {
+            return await _context.Transactions
+                .Where(x => x.TransactionId == transactionId)
+                .ProjectTo<TransactionResponseDto>(_mapper.ConfigurationProvider)
+                .FirstAsync();
+        }
+
+        public async Task<bool> UserExistsAsync(string userId)
+        {
+            return await _context.Users.AnyAsync(x => x.Id == userId);
         }
 
         public async Task<string?> GetOwnerUserIdAsync(int transactionId)
