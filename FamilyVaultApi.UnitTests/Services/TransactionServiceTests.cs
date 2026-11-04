@@ -357,5 +357,48 @@ namespace FamilyVaultApi.UnitTests.Services
             await act.Should().ThrowAsync<SecurityException>();
             _repositoryMock.Verify(x => x.DeleteAsync(It.IsAny<int>()), Times.Never);
         }
+
+        // -- GetAllAsync: filtros repassados ao repository ---------------------
+
+        [Fact]
+        public async Task GetAllAsync_WhenDescriptionAndDatesProvided_ShouldPassThemUnchangedToRepository()
+        {
+            var query = new TransactionQueryRequestDto
+            {
+                Description = "mercado",
+                StartDate = new DateOnly(2026, 3, 1),
+                EndDate = new DateOnly(2026, 3, 31)
+            };
+            TransactionQueryRequestDto? received = null;
+
+            _repositoryMock
+                .Setup(x => x.GetAllAsync(It.IsAny<TransactionQueryRequestDto>()))
+                .Callback<TransactionQueryRequestDto>(q => received = q)
+                .ReturnsAsync(new PagedResult<TransactionResponseDto>());
+
+            await _service.GetAllAsync(query, ClaimsPrincipalTestHelper.CreateAdmin());
+
+            received.Should().NotBeNull();
+            received!.Description.Should().Be("mercado");
+            received.StartDate.Should().Be(new DateOnly(2026, 3, 1));
+            received.EndDate.Should().Be(new DateOnly(2026, 3, 31));
+        }
+
+        [Fact]
+        public async Task GetAllAsync_WhenOnlyStartDateProvided_ShouldKeepEndDateNull()
+        {
+            var query = new TransactionQueryRequestDto { StartDate = new DateOnly(2026, 3, 1) };
+            TransactionQueryRequestDto? received = null;
+
+            _repositoryMock
+                .Setup(x => x.GetAllAsync(It.IsAny<TransactionQueryRequestDto>()))
+                .Callback<TransactionQueryRequestDto>(q => received = q)
+                .ReturnsAsync(new PagedResult<TransactionResponseDto>());
+
+            await _service.GetAllAsync(query, ClaimsPrincipalTestHelper.CreateAdmin());
+
+            received!.StartDate.Should().Be(new DateOnly(2026, 3, 1));
+            received.EndDate.Should().BeNull();
+        }
     }
 }

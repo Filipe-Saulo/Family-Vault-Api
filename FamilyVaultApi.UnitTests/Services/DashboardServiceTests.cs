@@ -74,8 +74,8 @@ namespace FamilyVaultApi.UnitTests.Services
         public async Task GetSummaryAsync_WhenNoDateRangeProvided_ShouldDefaultToCurrentMonth()
         {
             var now = DateTime.UtcNow;
-            var expectedStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-            var expectedEnd = expectedStart.AddMonths(1).AddTicks(-1);
+            var expectedStart = new DateOnly(now.Year, now.Month, 1);
+            var expectedEnd = expectedStart.AddMonths(1).AddDays(-1);
             var query = new DashboardQueryRequestDto();
             var expected = new DashboardSummaryDto();
 
@@ -92,7 +92,7 @@ namespace FamilyVaultApi.UnitTests.Services
         [Fact]
         public async Task GetSummaryAsync_WhenOnlyStartDateProvided_ShouldLeaveEndDateOpen()
         {
-            var startDate = new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc);
+            var startDate = new DateOnly(2026, 3, 10);
             var query = new DashboardQueryRequestDto { StartDate = startDate };
             var expected = new DashboardSummaryDto();
 
@@ -109,7 +109,7 @@ namespace FamilyVaultApi.UnitTests.Services
         [Fact]
         public async Task GetSummaryAsync_WhenOnlyEndDateProvided_ShouldLeaveStartDateOpen()
         {
-            var endDate = new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc);
+            var endDate = new DateOnly(2026, 3, 10);
             var query = new DashboardQueryRequestDto { EndDate = endDate };
             var expected = new DashboardSummaryDto();
 
@@ -126,8 +126,8 @@ namespace FamilyVaultApi.UnitTests.Services
         [Fact]
         public async Task GetSummaryAsync_WhenBothDatesProvided_ShouldNotOverride()
         {
-            var startDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            var endDate = new DateTime(2026, 1, 31, 23, 59, 59, DateTimeKind.Utc);
+            var startDate = new DateOnly(2026, 1, 1);
+            var endDate = new DateOnly(2026, 1, 31);
             var query = new DashboardQueryRequestDto { StartDate = startDate, EndDate = endDate };
             var expected = new DashboardSummaryDto();
 
@@ -139,6 +139,44 @@ namespace FamilyVaultApi.UnitTests.Services
 
             query.StartDate.Should().Be(startDate);
             query.EndDate.Should().Be(endDate);
+        }
+
+        [Fact]
+        public async Task GetSummaryAsync_WhenNoDateRangeProvided_ShouldSendFirstAndLastDayOfCurrentMonthToRepository()
+        {
+            var now = DateTime.UtcNow;
+            var expectedStart = new DateOnly(now.Year, now.Month, 1);
+            var expectedEnd = new DateOnly(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month));
+            DashboardQueryRequestDto? received = null;
+
+            _repositoryMock
+                .Setup(x => x.GetSummaryAsync(It.IsAny<DashboardQueryRequestDto>()))
+                .Callback<DashboardQueryRequestDto>(q => received = q)
+                .ReturnsAsync(new DashboardSummaryDto());
+
+            await _service.GetSummaryAsync(new DashboardQueryRequestDto(), ClaimsPrincipalTestHelper.CreateAdmin());
+
+            received.Should().NotBeNull();
+            received!.StartDate.Should().Be(expectedStart);
+            received.EndDate.Should().Be(expectedEnd);
+        }
+
+        [Fact]
+        public async Task GetSummaryAsync_WhenOnlyOneDateProvided_ShouldSendOtherDateAsNullToRepository()
+        {
+            DashboardQueryRequestDto? received = null;
+
+            _repositoryMock
+                .Setup(x => x.GetSummaryAsync(It.IsAny<DashboardQueryRequestDto>()))
+                .Callback<DashboardQueryRequestDto>(q => received = q)
+                .ReturnsAsync(new DashboardSummaryDto());
+
+            await _service.GetSummaryAsync(
+                new DashboardQueryRequestDto { StartDate = new DateOnly(2026, 3, 10) },
+                ClaimsPrincipalTestHelper.CreateAdmin());
+
+            received!.StartDate.Should().Be(new DateOnly(2026, 3, 10));
+            received.EndDate.Should().BeNull();
         }
     }
 }

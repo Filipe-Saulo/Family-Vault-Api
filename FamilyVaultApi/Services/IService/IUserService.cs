@@ -9,6 +9,7 @@ namespace FamilyVaultApi.Services.IService
     public interface IUserService
     {
         Task<PagedResult<UserResponseDto>> GetUsersAsync(UserQueryRequestDto query);
+        Task<UserResponseDto> GetMeAsync(ClaimsPrincipal userClaims);
         Task<UserResponseDto> UpdateUserAsync(string userId, UpdateUserDto dto, ClaimsPrincipal userClaims);
         Task DeleteUserAsync(string userId, ClaimsPrincipal userClaims);
         Task<List<PermissionCode>> GetPermissionsAsync(string userId);

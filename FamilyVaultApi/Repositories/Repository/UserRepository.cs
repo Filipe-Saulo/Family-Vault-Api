@@ -49,6 +49,12 @@ namespace FamilyVaultApi.Repositories.Repository
             if (!string.IsNullOrWhiteSpace(query.Email))
                 usersQuery = usersQuery.Where(u => u.Email.Contains(query.Email));
 
+            if (!string.IsNullOrWhiteSpace(query.Search))
+                usersQuery = usersQuery.Where(u =>
+                    u.FullName.Contains(query.Search) ||
+                    u.Email.Contains(query.Search) ||
+                    u.PhoneNumber.Contains(query.Search));
+
             var totalCount = await usersQuery.CountAsync();
 
             var items = await usersQuery
@@ -67,6 +73,19 @@ namespace FamilyVaultApi.Repositories.Repository
             };
         }
 
+
+        public async Task<UserResponseDto> GetByIdAsync(string userId)
+        {
+            var user = await _context.Users
+                .Where(u => u.Id == userId)
+                .ProjectTo<UserResponseDto>(_mapper.ConfigurationProvider)
+                .FirstOrDefaultAsync();
+
+            if (user == null)
+                throw new NotFoundException("Usuário", userId);
+
+            return user;
+        }
 
         public async Task<UserResponseDto> UpdateAsync(string userId, UpdateUserDto dto)
         {

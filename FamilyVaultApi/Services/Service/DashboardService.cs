@@ -35,11 +35,11 @@ namespace FamilyVaultApi.Services.Service
             return await _repository.GetSummaryAsync(query);
         }
 
-        private static (DateTime Start, DateTime End) GetCurrentMonthRange()
+        private static (DateOnly Start, DateOnly End) GetCurrentMonthRange()
         {
-            var now = DateTime.UtcNow;
-            var start = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-            var end = start.AddMonths(1).AddTicks(-1);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var start = new DateOnly(today.Year, today.Month, 1);
+            var end = start.AddMonths(1).AddDays(-1);
             return (start, end);
         }
     }

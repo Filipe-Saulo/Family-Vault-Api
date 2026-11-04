@@ -37,6 +37,14 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<PagedResult<CategoryResponseDto>>.Ok(result));
         }
 
+        [HttpGet("lookup")]
+        [Authorize(Roles = "Administrator, User")]
+        public async Task<ActionResult<ApiResponse<List<CategoryResponseDto>>>> GetLookup()
+        {
+            var result = await _categoryService.GetLookupAsync();
+            return Ok(ApiResponse<List<CategoryResponseDto>>.Ok(result));
+        }
+
         [HttpPut("{id:int}")]
         [Authorize(Policy = nameof(PermissionCode.ManageCategories))]
         public async Task<ActionResult<ApiResponse<CategoryResponseDto>>> Put(int id, [FromBody] UpdateCategoryDto dto)

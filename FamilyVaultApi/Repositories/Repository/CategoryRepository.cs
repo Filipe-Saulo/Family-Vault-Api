@@ -82,6 +82,14 @@ namespace FamilyVaultApi.Repositories.Repository
         }
 
 
+        public async Task<List<CategoryResponseDto>> GetLookupAsync()
+        {
+            return await _context.Categories
+                .OrderBy(x => x.Description)
+                .ProjectTo<CategoryResponseDto>(_mapper.ConfigurationProvider)
+                .ToListAsync();
+        }
+
         public async Task<CategoryResponseDto> UpdateAsync(int id, UpdateCategoryDto dto)
         {
             var entity = await _context.Categories.FindAsync(id);
