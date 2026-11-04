@@ -3,6 +3,7 @@ using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
 using FamilyVaultApi.Models.Dto.Responses.Account;
 using FamilyVaultApi.Models.Internal;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Identity;
@@ -116,7 +117,7 @@ namespace FamilyVaultApi.Services.Service
                 : await _identityService.RegisterUser(dto, phoneFormated);
         }
 
-        public async Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto)
+        public async Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto, AuthClient client)
         {
             bool isAdmin = !string.IsNullOrEmpty(loginDto.Email) && string.IsNullOrEmpty(loginDto.Phone);
             bool isUser = string.IsNullOrEmpty(loginDto.Email) && !string.IsNullOrEmpty(loginDto.Phone);
@@ -141,7 +142,7 @@ namespace FamilyVaultApi.Services.Service
                 throw new SecurityException("Usuário sem role válida.");
 
             var token = await BuildAccessTokenAsync(user, userIsAdmin, userIsUser);
-            var refreshToken = await _identityService.CreateRefreshTokenAsync(user);
+            var refreshToken = await _identityService.CreateRefreshTokenAsync(user, client);
 
             return new AuthResponseDto
             {
@@ -173,44 +174,31 @@ namespace FamilyVaultApi.Services.Service
             });
         }
 
-        public async Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request)
+        public async Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request, AuthClient client)
         {
-            var handler = new JwtSecurityTokenHandler();
-            JwtSecurityToken tokenContent;
-            try
-            {
-                tokenContent = handler.ReadJwtToken(request.Token);
-            }
-            catch (ArgumentException)
-            {
+            var principal = _tokenService.GetPrincipalFromExpiredToken(request.Token);
+            if (principal == null)
                 throw new UnauthorizedAccessException("Token inválido.");
-            }
 
-            var userId = tokenContent.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
+            var userId = principal.FindFirst("uid")?.Value;
             if (string.IsNullOrEmpty(userId))
                 throw new UnauthorizedAccessException("Token sem identificador de usuário");
 
-            var username = tokenContent.Claims.FirstOrDefault(c =>
-                c.Type == JwtRegisteredClaimNames.Email || c.Type == "phone_number")?.Value;
-
-            if (string.IsNullOrEmpty(username))
-                throw new UnauthorizedAccessException("Token inválido.");
-
-            var user = await _identityService.FindByNameAsync(username);
+            var user = await _identityService.FindByIdAsync(userId);
             if (user == null)
                 throw new UnauthorizedAccessException("Usuário não encontrado ou não autorizado.");
 
-            var isValidRefreshToken = await _identityService.VerifyRefreshTokenAsync(user, request.RefreshToken);
+            var isValidRefreshToken = await _identityService.VerifyRefreshTokenAsync(user, client, request.RefreshToken);
             if (!isValidRefreshToken)
             {
-                await _identityService.RevokeSecurityStampAsync(user);
+                await _identityService.RevokeRefreshTokensAsync(user);
                 throw new UnauthorizedAccessException("Refresh token inválido ou expirado.");
             }
 
             var (isAdmin, isUser) = await _identityService.GetRolesAsync(user);
 
             var newAccessToken = await BuildAccessTokenAsync(user, isAdmin, isUser);
-            var newRefreshToken = await _identityService.CreateRefreshTokenAsync(user);
+            var newRefreshToken = await _identityService.CreateRefreshTokenAsync(user, client);
 
             return new AuthResponseDto
             {
@@ -233,17 +221,8 @@ namespace FamilyVaultApi.Services.Service
 
             if (string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(token))
             {
-                var handler = new JwtSecurityTokenHandler();
-                JwtSecurityToken jwtToken;
-                try
-                {
-                    jwtToken = handler.ReadJwtToken(token);
-                }
-                catch (ArgumentException)
-                {
-                    throw new UnauthorizedAccessException("Token inválido.");
-                }
-                userId = jwtToken.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
+                var principal = _tokenService.GetPrincipalFromExpiredToken(token);
+                userId = principal?.FindFirst("uid")?.Value;
             }
 
             if (string.IsNullOrEmpty(userId))

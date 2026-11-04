@@ -51,5 +51,37 @@ namespace FamilyVaultApi.Services.Service
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
+        public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                return null;
+
+            var parameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = false,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = _configuration["JwtSettings:Issuer"],
+                ValidAudience = _configuration["JwtSettings:Audience"],
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"])),
+                RoleClaimType = ClaimTypes.Role
+            };
+
+            try
+            {
+                var principal = new JwtSecurityTokenHandler().ValidateToken(token, parameters, out var validatedToken);
+
+                if (validatedToken is not JwtSecurityToken jwt || jwt.Header.Alg != SecurityAlgorithms.HmacSha256)
+                    return null;
+
+                return principal;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
     }
 }

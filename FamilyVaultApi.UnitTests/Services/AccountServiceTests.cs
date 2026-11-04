@@ -3,6 +3,7 @@ using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
 using FamilyVaultApi.Models.Dto.Responses.Account;
 using FamilyVaultApi.Models.Internal;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.IService;
 using FamilyVaultApi.Services.Service;
@@ -192,7 +193,7 @@ namespace FamilyVaultApi.UnitTests.Services
         {
             var dto = LoginRequestBuilder.New().WithEmail(null).WithPhone(null).Build();
 
-            Func<Task> act = () => CreateService().LoginAsync(dto);
+            Func<Task> act = () => CreateService().LoginAsync(dto, AuthClient.Web);
 
             await act.Should().ThrowAsync<BadRequestException>();
         }
@@ -202,7 +203,7 @@ namespace FamilyVaultApi.UnitTests.Services
         {
             var dto = LoginRequestBuilder.New().WithEmail("a@b.com").WithPhone("5511987654321").Build();
 
-            Func<Task> act = () => CreateService().LoginAsync(dto);
+            Func<Task> act = () => CreateService().LoginAsync(dto, AuthClient.Web);
 
             await act.Should().ThrowAsync<BadRequestException>();
         }
@@ -213,7 +214,7 @@ namespace FamilyVaultApi.UnitTests.Services
             var dto = LoginRequestBuilder.New().WithPhone(null).Build();
             _identityServiceMock.Setup(x => x.FindUserByLoginAsync(dto)).ReturnsAsync((User?)null);
 
-            Func<Task> act = () => CreateService().LoginAsync(dto);
+            Func<Task> act = () => CreateService().LoginAsync(dto, AuthClient.Web);
 
             var ex = (await act.Should().ThrowAsync<UnauthorizedAccessException>()).Which;
             ex.Message.Should().Be("Usuário ou senha inválidos.");
@@ -226,7 +227,7 @@ namespace FamilyVaultApi.UnitTests.Services
             var dto = LoginRequestBuilder.New().WithEmail(null).WithPhone("11987654321").Build();
             _identityServiceMock.Setup(x => x.FindUserByLoginAsync(dto)).ReturnsAsync((User?)null);
 
-            Func<Task> act = () => CreateService().LoginAsync(dto);
+            Func<Task> act = () => CreateService().LoginAsync(dto, AuthClient.Web);
 
             var ex = (await act.Should().ThrowAsync<UnauthorizedAccessException>()).Which;
             ex.Message.Should().Be("Usuário ou senha inválidos.");
@@ -241,7 +242,7 @@ namespace FamilyVaultApi.UnitTests.Services
             _identityServiceMock.Setup(x => x.FindUserByLoginAsync(dto)).ReturnsAsync(user);
             _identityServiceMock.Setup(x => x.CheckPasswordAsync(user, dto.Password)).ReturnsAsync(false);
 
-            Func<Task> act = () => CreateService().LoginAsync(dto);
+            Func<Task> act = () => CreateService().LoginAsync(dto, AuthClient.Web);
 
             var ex = (await act.Should().ThrowAsync<UnauthorizedAccessException>()).Which;
             ex.Message.Should().Be("Usuário ou senha inválidos.");
@@ -257,13 +258,15 @@ namespace FamilyVaultApi.UnitTests.Services
             _identityServiceMock.Setup(x => x.CheckPasswordAsync(user, dto.Password)).ReturnsAsync(true);
             _identityServiceMock.Setup(x => x.GetRolesAsync(user)).ReturnsAsync((false, false));
 
-            Func<Task> act = () => CreateService().LoginAsync(dto);
+            Func<Task> act = () => CreateService().LoginAsync(dto, AuthClient.Web);
 
             await act.Should().ThrowAsync<SecurityException>();
         }
 
-        [Fact]
-        public async Task LoginAsync_WhenCredentialsAreValid_ShouldReturnAuthResponseWithGeneratedToken()
+        [Theory]
+        [InlineData(AuthClient.Web)]
+        [InlineData(AuthClient.App)]
+        public async Task LoginAsync_WhenCredentialsAreValid_ShouldReturnAuthResponseWithGeneratedToken(AuthClient client)
         {
             var dto = LoginRequestBuilder.New().WithPhone(null).Build();
             var user = CreateUserEntity(id: "user-1", email: dto.Email);
@@ -272,101 +275,118 @@ namespace FamilyVaultApi.UnitTests.Services
             _identityServiceMock.Setup(x => x.GetRolesAsync(user)).ReturnsAsync((true, false));
             _identityServiceMock.Setup(x => x.GetUserClaimsAsync(user)).ReturnsAsync(new List<Claim>());
             _identityServiceMock.Setup(x => x.GetRoleClaimsAsync("Administrator")).ReturnsAsync(new List<Claim>());
-            _identityServiceMock.Setup(x => x.CreateRefreshTokenAsync(user)).ReturnsAsync("refresh-token");
+            _identityServiceMock.Setup(x => x.CreateRefreshTokenAsync(user, client)).ReturnsAsync("refresh-token");
             _tokenServiceMock.Setup(x => x.GenerateAccessToken(It.Is<TokenClaimsData>(d => d.UserId == "user-1" && d.IsAdmin)))
                 .Returns("access-token");
 
-            var result = await CreateService().LoginAsync(dto);
+            var result = await CreateService().LoginAsync(dto, client);
 
             result.UserId.Should().Be("user-1");
             result.Token.Should().Be("access-token");
             result.RefreshToken.Should().Be("refresh-token");
+            _identityServiceMock.Verify(x => x.CreateRefreshTokenAsync(user, client), Times.Once);
+            _identityServiceMock.Verify(x => x.CreateRefreshTokenAsync(user, It.Is<AuthClient>(c => c != client)), Times.Never);
             _identityServiceMock.Verify(x => x.UpdateLastLoginAsync(user), Times.Once);
         }
 
         // ── RefreshTokenAsync ────────────────────────────────────────────────
 
+        private void SetUpPrincipal(string token, string? uid)
+        {
+            var principal = uid is null
+                ? new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", "x") }, "TestAuth"))
+                : ClaimsPrincipalTestHelper.CreateUser(uid);
+            _tokenServiceMock.Setup(x => x.GetPrincipalFromExpiredToken(token)).Returns(principal);
+        }
+
+        [Fact]
+        public async Task RefreshTokenAsync_WhenPrincipalIsNull_ShouldThrowUnauthorizedAccessException()
+        {
+            var request = RefreshTokenRequestBuilder.New().WithToken("isto-nao-e-um-jwt").Build();
+            _tokenServiceMock.Setup(x => x.GetPrincipalFromExpiredToken(request.Token)).Returns((ClaimsPrincipal?)null);
+
+            Func<Task> act = () => CreateService().RefreshTokenAsync(request, AuthClient.Web);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            _identityServiceMock.Verify(x => x.FindByIdAsync(It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task RefreshTokenAsync_WhenTokenIsEmpty_ShouldThrowUnauthorizedAccessException()
+        {
+            var request = RefreshTokenRequestBuilder.New().WithToken(string.Empty).Build();
+
+            Func<Task> act = () => CreateService().RefreshTokenAsync(request, AuthClient.Web);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            _identityServiceMock.Verify(x => x.FindByIdAsync(It.IsAny<string>()), Times.Never);
+        }
+
         [Fact]
         public async Task RefreshTokenAsync_WhenTokenHasNoUidClaim_ShouldThrowUnauthorizedAccessException()
         {
-            var request = RefreshTokenRequestBuilder.New().WithToken(JwtTokenTestHelper.CreateToken(uid: null)).Build();
+            var request = RefreshTokenRequestBuilder.New().WithToken("token-sem-uid").Build();
+            SetUpPrincipal(request.Token, uid: null);
 
-            Func<Task> act = () => CreateService().RefreshTokenAsync(request);
-
-            await act.Should().ThrowAsync<UnauthorizedAccessException>();
-        }
-
-        [Fact]
-        public async Task RefreshTokenAsync_WhenTokenIsMalformed_ShouldThrowUnauthorizedAccessException()
-        {
-            var request = RefreshTokenRequestBuilder.New().WithToken("isto-nao-e-um-jwt").Build();
-
-            Func<Task> act = () => CreateService().RefreshTokenAsync(request);
+            Func<Task> act = () => CreateService().RefreshTokenAsync(request, AuthClient.Web);
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>();
-        }
-
-        [Fact]
-        public async Task RefreshTokenAsync_WhenTokenHasNoUsernameClaim_ShouldThrowUnauthorizedAccessException()
-        {
-            var request = RefreshTokenRequestBuilder.New()
-                .WithToken(JwtTokenTestHelper.CreateToken("user-1", includeUsernameClaim: false))
-                .Build();
-
-            Func<Task> act = () => CreateService().RefreshTokenAsync(request);
-
-            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            _identityServiceMock.Verify(x => x.FindByIdAsync(It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
         public async Task RefreshTokenAsync_WhenUserNotFound_ShouldThrowUnauthorizedAccessException()
         {
-            var request = RefreshTokenRequestBuilder.New()
-                .WithToken(JwtTokenTestHelper.CreateToken("user-1", usernameClaimValue: "user@example.com"))
-                .Build();
-            _identityServiceMock.Setup(x => x.FindByNameAsync("user@example.com")).ReturnsAsync((User?)null);
+            var request = RefreshTokenRequestBuilder.New().WithToken("token-valido").Build();
+            SetUpPrincipal(request.Token, "user-1");
+            _identityServiceMock.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync((User?)null);
 
-            Func<Task> act = () => CreateService().RefreshTokenAsync(request);
+            Func<Task> act = () => CreateService().RefreshTokenAsync(request, AuthClient.Web);
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>();
         }
 
-        [Fact]
-        public async Task RefreshTokenAsync_WhenRefreshTokenIsInvalid_ShouldRevokeSecurityStampAndThrowUnauthorized()
+        [Theory]
+        [InlineData(AuthClient.Web)]
+        [InlineData(AuthClient.App)]
+        public async Task RefreshTokenAsync_WhenRefreshTokenIsInvalid_ShouldRevokeAllRefreshTokensAndThrowUnauthorized(AuthClient client)
         {
-            var request = RefreshTokenRequestBuilder.New()
-                .WithToken(JwtTokenTestHelper.CreateToken("user-1", usernameClaimValue: "user@example.com"))
-                .Build();
+            var request = RefreshTokenRequestBuilder.New().WithToken("token-valido").Build();
+            SetUpPrincipal(request.Token, "user-1");
             var user = CreateUserEntity(id: "user-1", email: "user@example.com");
-            _identityServiceMock.Setup(x => x.FindByNameAsync("user@example.com")).ReturnsAsync(user);
-            _identityServiceMock.Setup(x => x.VerifyRefreshTokenAsync(user, request.RefreshToken)).ReturnsAsync(false);
+            _identityServiceMock.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(user);
+            _identityServiceMock.Setup(x => x.VerifyRefreshTokenAsync(user, client, request.RefreshToken)).ReturnsAsync(false);
 
-            Func<Task> act = () => CreateService().RefreshTokenAsync(request);
+            Func<Task> act = () => CreateService().RefreshTokenAsync(request, client);
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>();
-            _identityServiceMock.Verify(x => x.RevokeSecurityStampAsync(user), Times.Once);
+            _identityServiceMock.Verify(x => x.RevokeRefreshTokensAsync(user), Times.Once);
+            _identityServiceMock.Verify(x => x.CreateRefreshTokenAsync(It.IsAny<User>(), It.IsAny<AuthClient>()), Times.Never);
         }
 
-        [Fact]
-        public async Task RefreshTokenAsync_WhenTokenIsValid_ShouldReturnNewTokens()
+        [Theory]
+        [InlineData(AuthClient.Web)]
+        [InlineData(AuthClient.App)]
+        public async Task RefreshTokenAsync_WhenTokenIsValid_ShouldReturnNewTokensForSameClient(AuthClient client)
         {
-            var request = RefreshTokenRequestBuilder.New()
-                .WithToken(JwtTokenTestHelper.CreateToken("user-1", usernameClaimValue: "user@example.com"))
-                .Build();
+            var request = RefreshTokenRequestBuilder.New().WithToken("token-valido").Build();
+            SetUpPrincipal(request.Token, "user-1");
             var user = CreateUserEntity(id: "user-1", email: "user@example.com");
-            _identityServiceMock.Setup(x => x.FindByNameAsync("user@example.com")).ReturnsAsync(user);
-            _identityServiceMock.Setup(x => x.VerifyRefreshTokenAsync(user, request.RefreshToken)).ReturnsAsync(true);
+            _identityServiceMock.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(user);
+            _identityServiceMock.Setup(x => x.VerifyRefreshTokenAsync(user, client, request.RefreshToken)).ReturnsAsync(true);
             _identityServiceMock.Setup(x => x.GetRolesAsync(user)).ReturnsAsync((true, false));
             _identityServiceMock.Setup(x => x.GetUserClaimsAsync(user)).ReturnsAsync(new List<Claim>());
             _identityServiceMock.Setup(x => x.GetRoleClaimsAsync("Administrator")).ReturnsAsync(new List<Claim>());
-            _identityServiceMock.Setup(x => x.CreateRefreshTokenAsync(user)).ReturnsAsync("new-refresh-token");
+            _identityServiceMock.Setup(x => x.CreateRefreshTokenAsync(user, client)).ReturnsAsync("new-refresh-token");
             _tokenServiceMock.Setup(x => x.GenerateAccessToken(It.IsAny<TokenClaimsData>())).Returns("new-access-token");
 
-            var result = await CreateService().RefreshTokenAsync(request);
+            var result = await CreateService().RefreshTokenAsync(request, client);
 
             result.UserId.Should().Be("user-1");
             result.Token.Should().Be("new-access-token");
             result.RefreshToken.Should().Be("new-refresh-token");
+            _identityServiceMock.Verify(x => x.CreateRefreshTokenAsync(user, client), Times.Once);
+            _identityServiceMock.Verify(x => x.RevokeRefreshTokensAsync(It.IsAny<User>()), Times.Never);
         }
 
         // ── LogoutAsync ──────────────────────────────────────────────────────
@@ -385,19 +405,22 @@ namespace FamilyVaultApi.UnitTests.Services
         [Fact]
         public async Task LogoutAsync_WhenNotAuthenticated_ShouldFallBackToTokenClaim()
         {
-            var token = JwtTokenTestHelper.CreateToken("user-2");
+            SetUpPrincipal("token-valido", "user-2");
 
-            await CreateService().LogoutAsync(token);
+            await CreateService().LogoutAsync("token-valido");
 
             _identityServiceMock.Verify(x => x.LogoutAsync("user-2"), Times.Once);
         }
 
         [Fact]
-        public async Task LogoutAsync_WhenTokenIsMalformed_ShouldThrowUnauthorizedAccessException()
+        public async Task LogoutAsync_WhenTokenIsInvalid_ShouldThrowUnauthorizedAccessException()
         {
+            _tokenServiceMock.Setup(x => x.GetPrincipalFromExpiredToken("isto-nao-e-um-jwt")).Returns((ClaimsPrincipal?)null);
+
             Func<Task> act = () => CreateService().LogoutAsync("isto-nao-e-um-jwt");
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            _identityServiceMock.Verify(x => x.LogoutAsync(It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
