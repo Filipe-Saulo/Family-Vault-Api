@@ -489,6 +489,17 @@ namespace FamilyVaultApi.UnitTests.Services
             _repositoryMock.Verify(x => x.GrantPermissionAsync("user-1", PermissionCode.ManageCategories), Times.Once);
         }
 
+        [Theory]
+        [InlineData(0)]
+        [InlineData(99)]
+        public async Task GrantPermissionAsync_WhenPermissionIsNotDefined_ShouldThrowBadRequestException(int value)
+        {
+            var act = () => _service.GrantPermissionAsync("user-1", (PermissionCode)value);
+
+            (await act.Should().ThrowAsync<BadRequestException>()).WithMessage("Permissão inválida.");
+            _repositoryMock.Verify(x => x.GrantPermissionAsync(It.IsAny<string>(), It.IsAny<PermissionCode>()), Times.Never);
+        }
+
         [Fact]
         public async Task RevokePermissionAsync_ShouldDelegateToRepository()
         {

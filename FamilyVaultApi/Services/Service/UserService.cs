@@ -175,6 +175,10 @@ namespace FamilyVaultApi.Services.Service
 
         public async Task GrantPermissionAsync(string userId, PermissionCode permission)
         {
+            // o JSON aceita qualquer número (ex.: 99); sem isso ele viraria claim
+            if (!Enum.IsDefined(permission))
+                throw new BadRequestException("Permissão inválida.");
+
             await _userRepository.GrantPermissionAsync(userId, permission);
         }
 
