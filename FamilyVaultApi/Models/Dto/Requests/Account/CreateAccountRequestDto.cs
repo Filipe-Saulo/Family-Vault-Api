@@ -5,9 +5,9 @@ namespace FamilyVaultApi.Models.Dto.Requests.Account
 {
     public class CreateAccountRequestDto
     {
-        [PhoneValidatorCustom]
-        public string PhoneNumber { get; init; }
-        public string Email { get; init; }
+        [PhoneValidatorCustomRequired]
+        public string? PhoneNumber { get; init; }
+        public string? Email { get; init; }
         [Required(ErrorMessage = "Password é obrigatório.")]
         public string Password { get; init; }      
         [StringLength(30, ErrorMessage = "O Primeiro nome deve ter no máximo 30 caracteres.")]
@@ -20,6 +20,7 @@ namespace FamilyVaultApi.Models.Dto.Requests.Account
         public string PasswordConfirm { get; init; }
 
         [Required(ErrorMessage = "A Idade é obrigatória")]
+        [Range(0, 150, ErrorMessage = "A Idade deve estar entre 0 e 150.")]
         public int Age { get; init; }
     }
 }
