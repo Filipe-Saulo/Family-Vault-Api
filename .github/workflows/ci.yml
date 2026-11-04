@@ -34,3 +34,6 @@ jobs:
 
       - name: Test
         run: dotnet test FamilyVaultApi.UnitTests --no-build --configuration Release
+
+      - name: Integration tests
+        run: dotnet test FamilyVaultApi.IntegrationTests --no-build --configuration Release

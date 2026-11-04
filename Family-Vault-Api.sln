@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FamilyVaultApi", "FamilyVau
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FamilyVaultApi.UnitTests", "FamilyVaultApi.UnitTests\FamilyVaultApi.UnitTests.csproj", "{BF9FD79B-46A9-49BF-96F5-E2E92387D3BE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FamilyVaultApi.IntegrationTests", "FamilyVaultApi.IntegrationTests\FamilyVaultApi.IntegrationTests.csproj", "{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,18 @@ Global
 		{BF9FD79B-46A9-49BF-96F5-E2E92387D3BE}.Release|x64.Build.0 = Release|Any CPU
 		{BF9FD79B-46A9-49BF-96F5-E2E92387D3BE}.Release|x86.ActiveCfg = Release|Any CPU
 		{BF9FD79B-46A9-49BF-96F5-E2E92387D3BE}.Release|x86.Build.0 = Release|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Debug|x64.Build.0 = Debug|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Debug|x86.Build.0 = Debug|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Release|x64.ActiveCfg = Release|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Release|x64.Build.0 = Release|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Release|x86.ActiveCfg = Release|Any CPU
+		{3D624E78-FDB6-427F-B4A5-EBB53CDDAA19}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

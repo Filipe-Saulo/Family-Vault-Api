@@ -19,11 +19,16 @@ dotnet ef database drop
 
 # Unit tests
 dotnet test FamilyVaultApi.UnitTests
+
+# Integration tests (no database needed: in-memory SQLite)
+dotnet test FamilyVaultApi.IntegrationTests
 ```
 
 Swagger UI (Development only) is available at `http://localhost:5090/swagger` or `https://localhost:7072/swagger` when running.
 
-`Family-Vault-Api.sln` has two projects: `FamilyVaultApi` (the API) and `FamilyVaultApi.UnitTests` (xUnit + Moq + FluentAssertions + Bogus, `net8.0`, `ProjectReference` to the main project). Tests live under `Services/` (one file per `Services/Service/*.cs` class), with mocks built per-test-class in the constructor (no shared fixtures) and fluent request builders in `Builders/<Entity>/` (`XxxDtoBuilder.New().With...().Build()`, defaults generated via `Bogus.Faker` rather than fixed constants). Naming convention: `MethodName_Scenario_ExpectedResult`. Only the Service layer has coverage — Controllers and Repositories do not.
+`FamilyVaultApi.IntegrationTests` (xUnit + FluentAssertions + `Microsoft.AspNetCore.Mvc.Testing` + EF Core SQLite) boots the API through `FamilyVaultApiFactory` (`WebApplicationFactory<Program>`) in the `Testing` environment: `Program.cs` skips the MySQL `AutoDetect`/`UseMySql` registration there, and the factory registers an in-memory SQLite connection, runs `EnsureCreated` (roles come from `HasData`) before startup, because `AdminSeeder` runs right after `Build()`. Each test creates its own factory (own database and `AdminSeed` settings). It covers only `AdminSeeder` so far.
+
+`Family-Vault-Api.sln` has three projects: `FamilyVaultApi` (the API), `FamilyVaultApi.IntegrationTests` (above) and `FamilyVaultApi.UnitTests` (xUnit + Moq + FluentAssertions + Bogus, `net8.0`, `ProjectReference` to the main project). Tests live under `Services/` (one file per `Services/Service/*.cs` class), with mocks built per-test-class in the constructor (no shared fixtures) and fluent request builders in `Builders/<Entity>/` (`XxxDtoBuilder.New().With...().Build()`, defaults generated via `Bogus.Faker` rather than fixed constants). Naming convention: `MethodName_Scenario_ExpectedResult`. Only the Service layer has coverage — Controllers and Repositories do not.
 
 ## Architecture
 
@@ -106,4 +111,4 @@ The repo has a `README.md` with a full endpoints table (Account, Category, Trans
 
 Serilog, health checks, and rate limiting (all listed as README features) **are** wired up in `Program.cs`: `UseSerilog`/`UseSerilogRequestLogging` write to console + a rolling file (`Serilog` section in `appsettings.json`), `AddHealthChecks().AddMySql(...)` backs `GET /health`, and `AddInMemoryRateLimiting`/`UseIpRateLimiting` (AspNetCoreRateLimit, `IpRateLimiting` section) throttles auth endpoints (3-10 req/min on login/register/password forgot+reset/refresh routes, 429 in the `ApiResponse<string>` envelope on breach, through `ApiIpRateLimitMiddleware`). Response caching is intentionally **off**: an inline middleware sets `Cache-Control: no-store` on every response, since almost every route is authenticated and per-user.
 
-A GitHub Actions workflow (`.github/workflows/ci.yml`) runs `dotnet build` + `dotnet test FamilyVaultApi.UnitTests` on every push/PR to `main`; there is no deploy step (portfolio project, not deployed anywhere).
+A GitHub Actions workflow (`.github/workflows/ci.yml`) runs `dotnet build` + `dotnet test` on `FamilyVaultApi.UnitTests` and `FamilyVaultApi.IntegrationTests` on every push/PR to `main`; there is no deploy step (portfolio project, not deployed anywhere).
