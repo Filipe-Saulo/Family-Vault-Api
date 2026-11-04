@@ -19,7 +19,7 @@ flowchart LR
 - Categories are **global or personal**; changing or deleting one in use answers **409**
 - Standard error **envelope** (`ApiResponse<T>` with `traceId`), also for 401, 403 and 429
 - **Rate limiting** on auth endpoints
-- **278 unit tests** on the Service layer and **integration tests** (WebApplicationFactory + in-memory SQLite) for the startup admin seed, run by CI on every push
+- **278 unit tests** on the Service layer and **integration tests** (WebApplicationFactory + in-memory SQLite) through the real HTTP pipeline, run by CI on every push, with **73.1% line coverage**
 
 ---
 
@@ -186,17 +186,28 @@ The `FamilyVaultApi.UnitTests` project (xUnit + Moq + FluentAssertions + Bogus) 
 dotnet test FamilyVaultApi.UnitTests
 ```
 
-The `FamilyVaultApi.IntegrationTests` project boots the whole API with `WebApplicationFactory` in the `Testing` environment, swapping MySQL for an in-memory SQLite database (schema and seeded roles from `EnsureCreated`), and checks the startup admin seed (`Data/AdminSeeder.cs`). It needs no running database either.
+The `FamilyVaultApi.IntegrationTests` project boots the whole API with `WebApplicationFactory` in the `Testing` environment, swapping MySQL for an in-memory SQLite database (schema and seeded roles from `EnsureCreated`), and checks the startup admin seed (`Data/AdminSeeder.cs`) and the main flows over HTTP (`Http/`): login of the seeded admin, the `ApiResponse` envelope with `traceId` on 401/403, granting permissions (an unknown number answers 400), and category and transaction CRUD with the owner rule (a User never sees or changes another User's records). It needs no running database either.
 
 ```bash
 dotnet test FamilyVaultApi.IntegrationTests
+```
+
+### Coverage
+
+**Line coverage: 73.1%** (branch 70.1%), unit and integration tests combined, measured on the `FamilyVaultApi` project without the generated `Migrations/`. CI prints the report in the job summary; the number above is updated by hand from it. To measure locally (needs `dotnet tool install -g dotnet-reportgenerator-globaltool`; delete `coverage/` first so old runs don't mix in):
+
+```bash
+rm -rf coverage
+dotnet test FamilyVaultApi.UnitTests --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory coverage
+dotnet test FamilyVaultApi.IntegrationTests --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory coverage
+reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage/report -reporttypes:TextSummary
 ```
 
 There is no lint step; `dotnet build` is the static check (also run by CI).
 
 ## CI/CD
 
-A GitHub Actions workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds the solution and runs the automated test suite on every push/PR to `main`. This is a deliberately minimal, demonstrative pipeline — since this project isn't deployed anywhere, there's no deploy step; it exists to show a basic automated build+test gate, which in a real-world scenario could be extended with deployment, integration tests against a real database, etc.
+A GitHub Actions workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds the solution, runs the unit and integration tests with coverage collection and writes the coverage summary (ReportGenerator) to the job page on every push/PR to `main`. This is a deliberately minimal, demonstrative pipeline — since this project isn't deployed anywhere, there's no deploy step; it exists to show a basic automated build+test gate, which in a real-world scenario could be extended with deployment, integration tests against a real database, etc.
 
 ## Technologies
 
