@@ -59,7 +59,7 @@ namespace FamilyVaultApi.Repositories.Repository
         {
             var entity = await _context.TransactionTypes.FindAsync(id);
             if (entity == null)
-                throw new NotFoundException("TransactionType", id);
+                throw new NotFoundException("Tipo de transação", id);
 
             entity.Name = dto.Name;
             entity.Description = dto.Description;

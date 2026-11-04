@@ -32,7 +32,7 @@ namespace FamilyVaultApi.Repositories.Repository
 
 
             if (!purposeExists)
-                throw new NotFoundException("CategoryPurpose não encontrado", dto.CategoryPurposeId);
+                throw new NotFoundException("Finalidade", dto.CategoryPurposeId);
 
 
             var entity = _mapper.Map<Category>(dto);
@@ -94,13 +94,13 @@ namespace FamilyVaultApi.Repositories.Repository
         {
             var entity = await _context.Categories.FindAsync(id);
             if (entity == null)
-                throw new NotFoundException("Category", id);
+                throw new NotFoundException("Categoria", id);
 
             var purposeExists = await _context.CategoryPurposes
                 .AnyAsync(x => x.CategoryPurposeId == dto.CategoryPurposeId);
 
             if (!purposeExists)
-                throw new NotFoundException("CategoryPurpose não encontrado", dto.CategoryPurposeId);
+                throw new NotFoundException("Finalidade", dto.CategoryPurposeId);
 
             entity.Description = dto.Description;
             entity.CategoryPurposeId = dto.CategoryPurposeId;
@@ -114,7 +114,7 @@ namespace FamilyVaultApi.Repositories.Repository
         {
             var entity = await _context.Categories.FindAsync(id);
             if (entity == null)
-                throw new NotFoundException("Category", id);
+                throw new NotFoundException("Categoria", id);
 
 
             _context.Categories.Remove(entity);

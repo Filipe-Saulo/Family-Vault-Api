@@ -258,7 +258,7 @@ namespace FamilyVaultApi.Services.Service
         {
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null)
-                throw new NotFoundException("Usuário não encontrado.", userId);
+                throw new NotFoundException("Usuário", userId);
 
             await RevokeRefreshTokensAsync(user);
         }
