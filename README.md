@@ -18,7 +18,7 @@ Supports **web and mobile clients**.
 - Serilog logging (console sink + request logging)
 - Swagger / OpenAPI documentation
 - Health check for MySQL at `/health`
-- Rate limiting on auth endpoints (login, register, reset password, refresh token)
+- Rate limiting on auth endpoints (login, register, password forgot/reset, refresh token)
 - Automated test suite (xUnit) covering the Service layer, run on every push via CI
 - Multi-platform: web apps and mobile apps
 
@@ -95,7 +95,11 @@ dotnet run --project FamilyVaultApi
 | POST | `/api/logout` | Revoke the user's refresh tokens on both clients (web and app) and clear the cookie; body `{token}` (access token, may be expired) when not authenticated |
 | POST | `/api/web/refreshtoken` | Refresh access token; reads/writes the refresh token via cookie |
 | POST | `/api/app/refreshtoken` | Refresh access token; reads/writes the refresh token via request/response body |
-| POST | `/api/resetPassword` | Reset user password |
+| POST | `/api/password/forgot` | Anonymous; body `{phone}`; always answers 202 (never reveals whether the account exists) and sends a 6-digit code by phone |
+| POST | `/api/password/reset` | Anonymous; body `{phone, code, password, passwordConfirm}`; invalid/expired code or locked account -> 400; a wrong code counts as a failed attempt; unlocks the account and revokes its sessions |
+| POST | `/api/password/change` | Administrator, User; body `{currentPassword, password, passwordConfirm}`; revokes the sessions (log in again) |
+
+> There is no SMS provider yet: `LoggingVerificationCodeSender` writes the recovery code to the log (`Código de recuperação para ***1234: 123456`) **only in Development**; in other environments it logs just that a code was generated.
 
 ### Category
 
@@ -134,6 +138,7 @@ dotnet run --project FamilyVaultApi
 | GET | `/api/User/me` | Administrator, User — the caller's own profile |
 | PUT | `/api/User/{id}` | Administrator, or the user themselves |
 | DELETE | `/api/User/{id}` | Administrator, or the user themselves; 409 for the last Administrator |
+| POST | `/api/User/{id}/password` | Administrator — sets a new password for the user (body `{password, passwordConfirm}`) and revokes their sessions |
 | GET | `/api/User/{userId}/permissions` | Administrator |
 | POST | `/api/User/{userId}/permissions` | Administrator |
 | DELETE | `/api/User/{userId}/permissions/{permission}` | Administrator |
