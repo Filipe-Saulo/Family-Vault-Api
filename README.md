@@ -60,13 +60,25 @@ cd FamilyVaultApi
 dotnet ef database update
 ```
 
-4. Run the API:
+4. Configure the first Administrator (only needed on an empty database; the account is created at startup when no
+   Administrator exists). Use user-secrets, never `appsettings.json`:
+
+```bash
+cd FamilyVaultApi
+dotnet user-secrets set "AdminSeed:Email" "admin@example.com"
+dotnet user-secrets set "AdminSeed:Password" "ChangeMe123"
+```
+
+Public sign-up (`POST /api/register`) only creates regular users by phone; further Administrators are created by an
+Administrator through `POST /api/User`.
+
+5. Run the API:
 
 ```bash
 dotnet run --project FamilyVaultApi
 ```
 
-5. Access Swagger UI:
+6. Access Swagger UI:
 
 - `http://localhost:5090/swagger`
 - `https://localhost:7072/swagger`
@@ -77,7 +89,7 @@ dotnet run --project FamilyVaultApi
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/register` | Register new account (Administrator via email, User via phone) |
+| POST | `/api/register` | Public sign-up of a regular User, by phone only (an e-mail is rejected) |
 | POST | `/api/web/login` | Authenticate; refresh token set as an HttpOnly cookie |
 | POST | `/api/app/login` | Authenticate; refresh token returned in the response body |
 | POST | `/api/logout` | Revoke the user's refresh tokens on both clients (web and app) and clear the cookie; body `{token}` (access token, may be expired) when not authenticated |
@@ -89,11 +101,11 @@ dotnet run --project FamilyVaultApi
 
 | Method | Endpoint | Roles |
 |---|---|---|
-| POST | `/api/category` | Administrator, User |
-| GET | `/api/category` | Administrator, User |
+| POST | `/api/category` | Administrator (creates a global category), User (creates a personal one) |
+| GET | `/api/category` | Administrator (global categories), User (global + own) |
 | GET | `/api/category/lookup` | Administrator, User — every category, unpaginated, ordered by description (for selects) |
-| PUT | `/api/category/{id}` | `ManageCategories` permission |
-| DELETE | `/api/category/{id}` | `ManageCategories` permission |
+| PUT | `/api/category/{id}` | Global: Administrator or `ManageCategories`; personal: its owner too. 409 when changing the purpose of a category in use |
+| DELETE | `/api/category/{id}` | Same as PUT; 409 when the category has transactions |
 
 ### Transaction
 
@@ -118,9 +130,10 @@ dotnet run --project FamilyVaultApi
 | Method | Endpoint | Roles |
 |---|---|---|
 | GET | `/api/User` | `ManageUsers` permission — `search` matches name, e-mail or phone |
+| POST | `/api/User` | Administrator — creates an Administrator (e-mail) or a User (phone), `role` in the body |
 | GET | `/api/User/me` | Administrator, User — the caller's own profile |
 | PUT | `/api/User/{id}` | Administrator, or the user themselves |
-| DELETE | `/api/User/{id}` | Administrator, or the user themselves |
+| DELETE | `/api/User/{id}` | Administrator, or the user themselves; 409 for the last Administrator |
 | GET | `/api/User/{userId}/permissions` | Administrator |
 | POST | `/api/User/{userId}/permissions` | Administrator |
 | DELETE | `/api/User/{userId}/permissions/{permission}` | Administrator |
