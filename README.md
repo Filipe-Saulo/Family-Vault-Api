@@ -90,7 +90,7 @@ dotnet run --project FamilyVaultApi
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/register` | Public sign-up of a regular User, by phone only (an e-mail is rejected) |
-| POST | `/api/web/login` | Authenticate; refresh token set as an HttpOnly cookie |
+| POST | `/api/web/login` | Authenticate; refresh token set as an HttpOnly, `SameSite=Lax`, `Path=/api` cookie (the web panel calls the API through its own origin via a proxy) |
 | POST | `/api/app/login` | Authenticate; refresh token returned in the response body |
 | POST | `/api/logout` | Revoke the user's refresh tokens on both clients (web and app) and clear the cookie; body `{token}` (access token, may be expired) when not authenticated |
 | POST | `/api/web/refreshtoken` | Refresh access token; reads/writes the refresh token via cookie |
