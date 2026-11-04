@@ -159,8 +159,8 @@ dotnet run --project FamilyVaultApi
 | GET | `/api/User` | `ManageUsers` permission — `search` matches name, e-mail or phone |
 | POST | `/api/User` | Administrator — creates an Administrator (e-mail) or a User (phone), `role` in the body |
 | GET | `/api/User/me` | Administrator, User — the caller's own profile |
-| PUT | `/api/User/{id}` | Administrator, or the user themselves |
-| DELETE | `/api/User/{id}` | Administrator, or the user themselves; 409 for the last Administrator |
+| PUT | `/api/User/{id}` | Administrator, the user themselves, or `ManageUsers` on a non-Administrator account (403 on an Administrator) |
+| DELETE | `/api/User/{id}` | Same as PUT; 409 for the last Administrator |
 | POST | `/api/User/{id}/password` | Administrator — sets a new password for the user (body `{password, passwordConfirm}`) and revokes their sessions |
 | GET | `/api/User/{userId}/permissions` | Administrator |
 | POST | `/api/User/{userId}/permissions` | Administrator |
