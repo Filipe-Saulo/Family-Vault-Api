@@ -123,6 +123,7 @@ namespace FamilyVaultApi.Controllers
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.None,
+                Expires = DateTimeOffset.UtcNow.AddDays(7),
             });
         }
 

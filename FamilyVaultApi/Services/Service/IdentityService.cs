@@ -16,7 +16,8 @@ namespace FamilyVaultApi.Services.Service
         private readonly UserManager<User> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
 
-        private readonly string _loginProvider = TokenOptions.DefaultProvider;
+        // Provider próprio (validade de 7 dias); o Default fica com a validade padrão para o reset de senha
+        private readonly string _loginProvider = RefreshTokenProvider.ProviderName;
         private const string _legacyRefreshTokenPurpose = "RefreshToken";
         private const string _webRefreshTokenPurpose = "RefreshToken-web";
         private const string _appRefreshTokenPurpose = "RefreshToken-app";
@@ -49,6 +50,21 @@ namespace FamilyVaultApi.Services.Service
             await _userManager.UpdateAsync(user);
         }
 
+        public async Task<bool> IsLockedOutAsync(User user)
+        {
+            return await _userManager.IsLockedOutAsync(user);
+        }
+
+        public async Task AccessFailedAsync(User user)
+        {
+            await _userManager.AccessFailedAsync(user);
+        }
+
+        public async Task ResetAccessFailedCountAsync(User user)
+        {
+            await _userManager.ResetAccessFailedCountAsync(user);
+        }
+
         public async Task<(bool IsAdmin, bool IsUser)> GetRolesAsync(User user)
         {
             var isAdmin = await _userManager.IsInRoleAsync(user, "Administrator");
@@ -64,6 +80,9 @@ namespace FamilyVaultApi.Services.Service
         public async Task<IList<Claim>> GetRoleClaimsAsync(string roleName)
         {
             var role = await _roleManager.FindByNameAsync(roleName);
+            if (role == null)
+                return new List<Claim>();
+
             return await _roleManager.GetClaimsAsync(role);
         }
 
@@ -107,6 +126,11 @@ namespace FamilyVaultApi.Services.Service
             await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _webRefreshTokenPurpose);
             await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _appRefreshTokenPurpose);
             await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _legacyRefreshTokenPurpose);
+
+            // Tokens gravados antes do provider próprio ficavam sob o provider padrão
+            await _userManager.RemoveAuthenticationTokenAsync(user, TokenOptions.DefaultProvider, _webRefreshTokenPurpose);
+            await _userManager.RemoveAuthenticationTokenAsync(user, TokenOptions.DefaultProvider, _appRefreshTokenPurpose);
+            await _userManager.RemoveAuthenticationTokenAsync(user, TokenOptions.DefaultProvider, _legacyRefreshTokenPurpose);
             await _userManager.UpdateSecurityStampAsync(user);
         }
 
@@ -194,11 +218,6 @@ namespace FamilyVaultApi.Services.Service
                 throw new NotFoundException("Usuário não encontrado.", userId);
 
             await RevokeRefreshTokensAsync(user);
-        }
-
-        public async Task<bool> AdministratorExistsAsync()
-        {
-            return (await _userManager.GetUsersInRoleAsync("Administrator")).Any();
         }
     }
 }

@@ -11,6 +11,7 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<UserResponseDto> GetByIdAsync(string userId);
         Task<UserResponseDto> UpdateAsync(string userId, UpdateUserDto dto);
         Task DeleteAsync(string userId);
+        Task<bool> IsLastAdministratorAsync(string userId);
         Task<List<PermissionCode>> GetPermissionsAsync(string userId);
         Task GrantPermissionAsync(string userId, PermissionCode permission);
         Task RevokePermissionAsync(string userId, PermissionCode permission);

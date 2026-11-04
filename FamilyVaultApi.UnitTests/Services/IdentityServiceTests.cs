@@ -10,7 +10,8 @@ namespace FamilyVaultApi.UnitTests.Services
 {
     public class IdentityServiceTests
     {
-        private static readonly string Provider = TokenOptions.DefaultProvider;
+        private const string Provider = "RefreshTokenProvider";
+        private static readonly string LegacyProvider = TokenOptions.DefaultProvider;
 
         private readonly Mock<UserManager<User>> _userManagerMock;
         private readonly Mock<RoleManager<IdentityRole>> _roleManagerMock;
@@ -130,10 +131,24 @@ namespace FamilyVaultApi.UnitTests.Services
         {
             await CreateService().RevokeRefreshTokensAsync(_user);
 
-            _userManagerMock.Verify(x => x.RemoveAuthenticationTokenAsync(_user, Provider, "RefreshToken-web"), Times.Once);
-            _userManagerMock.Verify(x => x.RemoveAuthenticationTokenAsync(_user, Provider, "RefreshToken-app"), Times.Once);
-            _userManagerMock.Verify(x => x.RemoveAuthenticationTokenAsync(_user, Provider, "RefreshToken"), Times.Once);
+            VerifyAllPurposesRemovedFromBothProviders();
             _userManagerMock.Verify(x => x.UpdateSecurityStampAsync(_user), Times.Once);
+        }
+
+        [Fact]
+        public async Task RevokeRefreshTokensAsync_ShouldAlsoRemoveTokensStoredUnderTheLegacyDefaultProvider()
+        {
+            await CreateService().RevokeRefreshTokensAsync(_user);
+
+            foreach (var purpose in new[] { "RefreshToken-web", "RefreshToken-app", "RefreshToken" })
+                _userManagerMock.Verify(x => x.RemoveAuthenticationTokenAsync(_user, LegacyProvider, purpose), Times.Once);
+        }
+
+        private void VerifyAllPurposesRemovedFromBothProviders()
+        {
+            foreach (var provider in new[] { Provider, LegacyProvider })
+                foreach (var purpose in new[] { "RefreshToken-web", "RefreshToken-app", "RefreshToken" })
+                    _userManagerMock.Verify(x => x.RemoveAuthenticationTokenAsync(_user, provider, purpose), Times.Once);
         }
 
         // ── FindByIdAsync ────────────────────────────────────────────────────
@@ -157,9 +172,7 @@ namespace FamilyVaultApi.UnitTests.Services
 
             await CreateService().LogoutAsync("user-1");
 
-            _userManagerMock.Verify(x => x.RemoveAuthenticationTokenAsync(_user, Provider, "RefreshToken-web"), Times.Once);
-            _userManagerMock.Verify(x => x.RemoveAuthenticationTokenAsync(_user, Provider, "RefreshToken-app"), Times.Once);
-            _userManagerMock.Verify(x => x.RemoveAuthenticationTokenAsync(_user, Provider, "RefreshToken"), Times.Once);
+            VerifyAllPurposesRemovedFromBothProviders();
             _userManagerMock.Verify(x => x.UpdateSecurityStampAsync(_user), Times.Once);
         }
 

@@ -41,7 +41,6 @@ namespace FamilyVaultApi.UnitTests.Services
         {
             _repositoryMock.Setup(x => x.EmailUserExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
             _repositoryMock.Setup(x => x.PhoneExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
-            _identityServiceMock.Setup(x => x.AdministratorExistsAsync()).ReturnsAsync(false);
             _tokenServiceMock.Setup(x => x.GenerateAccessToken(It.IsAny<TokenClaimsData>())).Returns("fake-jwt-token");
 
             string defaultFormatted = "+5511987654312";
@@ -73,24 +72,15 @@ namespace FamilyVaultApi.UnitTests.Services
         }
 
         [Fact]
-        public async Task RegisterAsync_WhenEmailIsInvalid_ShouldReturnError()
+        public async Task RegisterAsync_WhenEmailIsProvided_ShouldThrowBadRequestException()
         {
-            var dto = CreateAccountRequestBuilder.New().WithEmail("not-an-email").WithPhoneNumber(null).Build();
+            var dto = CreateAccountRequestBuilder.New().WithPhoneNumber("5511987654312").Build();
 
-            var errors = await CreateService().RegisterAsync(dto);
+            Func<Task> act = () => CreateService().RegisterAsync(dto);
 
-            errors.Should().Contain(e => e.Code == "InvalidEmail");
-        }
-
-        [Fact]
-        public async Task RegisterAsync_WhenEmailAlreadyExists_ShouldReturnError()
-        {
-            var dto = CreateAccountRequestBuilder.New().WithPhoneNumber(null).Build();
-            _repositoryMock.Setup(x => x.EmailUserExistsAsync(dto.Email)).ReturnsAsync(true);
-
-            var errors = await CreateService().RegisterAsync(dto);
-
-            errors.Should().Contain(e => e.Code == "DuplicateEmail");
+            await act.Should().ThrowAsync<BadRequestException>();
+            _identityServiceMock.Verify(x => x.RegisterAdmin(It.IsAny<CreateAccountRequestDto>()), Times.Never);
+            _identityServiceMock.Verify(x => x.RegisterUser(It.IsAny<CreateAccountRequestDto>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -131,45 +121,6 @@ namespace FamilyVaultApi.UnitTests.Services
             var errors = await CreateService().RegisterAsync(dto);
 
             errors.Should().Contain(e => e.Code == "PasswordMismatch");
-        }
-
-        [Fact]
-        public async Task RegisterAsync_WhenFirstAdministrator_ShouldBootstrapWithoutAuthentication()
-        {
-            var dto = CreateAccountRequestBuilder.New().WithPhoneNumber(null).Build();
-            _identityServiceMock.Setup(x => x.AdministratorExistsAsync()).ReturnsAsync(false);
-            _identityServiceMock.Setup(x => x.RegisterAdmin(dto)).ReturnsAsync(Enumerable.Empty<IdentityError>());
-
-            var errors = await CreateService().RegisterAsync(dto);
-
-            errors.Should().BeEmpty();
-            _identityServiceMock.Verify(x => x.RegisterAdmin(dto), Times.Once);
-        }
-
-        [Fact]
-        public async Task RegisterAsync_WhenAdministratorExists_AndCallerIsNotAdmin_ShouldReturnError()
-        {
-            var dto = CreateAccountRequestBuilder.New().WithPhoneNumber(null).Build();
-            _identityServiceMock.Setup(x => x.AdministratorExistsAsync()).ReturnsAsync(true);
-            _httpContextAccessorMock = HttpContextAccessorTestHelper.WithUser(ClaimsPrincipalTestHelper.CreateUser());
-
-            var errors = await CreateService().RegisterAsync(dto);
-
-            errors.Should().Contain(e => e.Code == "AdminRegistrationRestricted");
-        }
-
-        [Fact]
-        public async Task RegisterAsync_WhenAdministratorExists_AndCallerIsAdmin_ShouldRegisterNewAdmin()
-        {
-            var dto = CreateAccountRequestBuilder.New().WithPhoneNumber(null).Build();
-            _identityServiceMock.Setup(x => x.AdministratorExistsAsync()).ReturnsAsync(true);
-            _identityServiceMock.Setup(x => x.RegisterAdmin(dto)).ReturnsAsync(Enumerable.Empty<IdentityError>());
-            _httpContextAccessorMock = HttpContextAccessorTestHelper.WithUser(ClaimsPrincipalTestHelper.CreateAdmin());
-
-            var errors = await CreateService().RegisterAsync(dto);
-
-            errors.Should().BeEmpty();
-            _identityServiceMock.Verify(x => x.RegisterAdmin(dto), Times.Once);
         }
 
         [Fact]
@@ -247,6 +198,57 @@ namespace FamilyVaultApi.UnitTests.Services
             var ex = (await act.Should().ThrowAsync<UnauthorizedAccessException>()).Which;
             ex.Message.Should().Be("Usuário ou senha inválidos.");
             ex.Message.Should().NotContain(dto.Email!);
+        }
+
+        [Fact]
+        public async Task LoginAsync_WhenAccountIsLockedOut_ShouldThrowGenericUnauthorizedWithoutCheckingPassword()
+        {
+            var dto = LoginRequestBuilder.New().WithPhone(null).Build();
+            var user = CreateUserEntity(email: dto.Email);
+            _identityServiceMock.Setup(x => x.FindUserByLoginAsync(dto)).ReturnsAsync(user);
+            _identityServiceMock.Setup(x => x.IsLockedOutAsync(user)).ReturnsAsync(true);
+
+            Func<Task> act = () => CreateService().LoginAsync(dto, AuthClient.Web);
+
+            var ex = (await act.Should().ThrowAsync<UnauthorizedAccessException>()).Which;
+            ex.Message.Should().Be("Usuário ou senha inválidos.");
+            _identityServiceMock.Verify(x => x.CheckPasswordAsync(It.IsAny<User>(), It.IsAny<string>()), Times.Never);
+            _identityServiceMock.Verify(x => x.AccessFailedAsync(It.IsAny<User>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task LoginAsync_WhenPasswordIsWrong_ShouldRegisterAccessFailure()
+        {
+            var dto = LoginRequestBuilder.New().WithPhone(null).Build();
+            var user = CreateUserEntity(email: dto.Email);
+            _identityServiceMock.Setup(x => x.FindUserByLoginAsync(dto)).ReturnsAsync(user);
+            _identityServiceMock.Setup(x => x.IsLockedOutAsync(user)).ReturnsAsync(false);
+            _identityServiceMock.Setup(x => x.CheckPasswordAsync(user, dto.Password)).ReturnsAsync(false);
+
+            Func<Task> act = () => CreateService().LoginAsync(dto, AuthClient.Web);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            _identityServiceMock.Verify(x => x.AccessFailedAsync(user), Times.Once);
+            _identityServiceMock.Verify(x => x.ResetAccessFailedCountAsync(It.IsAny<User>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task LoginAsync_WhenPasswordIsCorrect_ShouldResetAccessFailedCount()
+        {
+            var dto = LoginRequestBuilder.New().WithPhone(null).Build();
+            var user = CreateUserEntity(email: dto.Email);
+            _identityServiceMock.Setup(x => x.FindUserByLoginAsync(dto)).ReturnsAsync(user);
+            _identityServiceMock.Setup(x => x.IsLockedOutAsync(user)).ReturnsAsync(false);
+            _identityServiceMock.Setup(x => x.CheckPasswordAsync(user, dto.Password)).ReturnsAsync(true);
+            _identityServiceMock.Setup(x => x.GetRolesAsync(user)).ReturnsAsync((true, false));
+            _identityServiceMock.Setup(x => x.GetUserClaimsAsync(user)).ReturnsAsync(new List<Claim>());
+            _identityServiceMock.Setup(x => x.GetRoleClaimsAsync("Administrator")).ReturnsAsync(new List<Claim>());
+            _identityServiceMock.Setup(x => x.CreateRefreshTokenAsync(user, AuthClient.Web)).ReturnsAsync("refresh");
+
+            await CreateService().LoginAsync(dto, AuthClient.Web);
+
+            _identityServiceMock.Verify(x => x.ResetAccessFailedCountAsync(user), Times.Once);
+            _identityServiceMock.Verify(x => x.AccessFailedAsync(It.IsAny<User>()), Times.Never);
         }
 
         [Fact]
@@ -344,6 +346,25 @@ namespace FamilyVaultApi.UnitTests.Services
             Func<Task> act = () => CreateService().RefreshTokenAsync(request, AuthClient.Web);
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        }
+
+        [Theory]
+        [InlineData(AuthClient.Web)]
+        [InlineData(AuthClient.App)]
+        public async Task RefreshTokenAsync_WhenAccountIsLockedOut_ShouldThrowUnauthorizedWithoutRevokingOrIssuing(AuthClient client)
+        {
+            var request = RefreshTokenRequestBuilder.New().WithToken("token-valido").Build();
+            SetUpPrincipal(request.Token, "user-1");
+            var user = CreateUserEntity(id: "user-1", email: "user@example.com");
+            _identityServiceMock.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(user);
+            _identityServiceMock.Setup(x => x.IsLockedOutAsync(user)).ReturnsAsync(true);
+            _identityServiceMock.Setup(x => x.VerifyRefreshTokenAsync(user, client, request.RefreshToken)).ReturnsAsync(true);
+
+            Func<Task> act = () => CreateService().RefreshTokenAsync(request, client);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            _identityServiceMock.Verify(x => x.RevokeRefreshTokensAsync(It.IsAny<User>()), Times.Never);
+            _identityServiceMock.Verify(x => x.CreateRefreshTokenAsync(It.IsAny<User>(), It.IsAny<AuthClient>()), Times.Never);
         }
 
         [Theory]

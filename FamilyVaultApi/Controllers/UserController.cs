@@ -29,6 +29,14 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<PagedResult<UserResponseDto>>.Ok(result));
         }
 
+        [HttpPost]
+        [Authorize(Roles = "Administrator")]
+        public async Task<ActionResult<ApiResponse<UserResponseDto>>> CreateUser([FromBody] CreateUserRequestDto dto)
+        {
+            var result = await _userService.CreateUserAsync(dto);
+            return StatusCode(StatusCodes.Status201Created, ApiResponse<UserResponseDto>.Created(result));
+        }
+
         [HttpGet("me")]
         [Authorize(Roles = "Administrator, User")]
         public async Task<ActionResult<ApiResponse<UserResponseDto>>> GetMe()

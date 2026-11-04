@@ -1,5 +1,9 @@
 using FamilyVaultApi.Exceptions;
+using FamilyVaultApi.Data.Entities;
+using FamilyVaultApi.Models.Dto.Requests.Account;
 using FamilyVaultApi.Models.Dto.Requests.User;
+using FamilyVaultApi.Services.IService;
+using Microsoft.AspNetCore.Identity;
 using FamilyVaultApi.Models.Dto.Responses.User;
 using FamilyVaultApi.Models.Internal;
 using FamilyVaultApi.Models.Internal.Enums;
@@ -16,12 +20,15 @@ namespace FamilyVaultApi.UnitTests.Services
     public class UserServiceTests
     {
         private readonly Mock<IUserRepository> _repositoryMock;
+        private readonly Mock<IIdentityService> _identityMock = new();
+        private readonly Mock<IAccountRepository> _accountRepositoryMock = new();
+        private readonly Mock<IPhoneNumberService> _phoneMock = new();
         private readonly UserService _service;
 
         public UserServiceTests()
         {
             _repositoryMock = new Mock<IUserRepository>();
-            _service = new UserService(_repositoryMock.Object);
+            _service = new UserService(_repositoryMock.Object, _identityMock.Object, _accountRepositoryMock.Object, _phoneMock.Object);
         }
 
         // ── GetUsersAsync ────────────────────────────────────────────────────
@@ -164,6 +171,199 @@ namespace FamilyVaultApi.UnitTests.Services
             await _service.DeleteUserAsync("target-user", ClaimsPrincipalTestHelper.CreateAdmin());
 
             _repositoryMock.Verify(x => x.DeleteAsync("target-user"), Times.Once);
+        }
+
+        [Fact]
+        public async Task DeleteUserAsync_WhenTargetIsLastAdministrator_ShouldThrowConflictException()
+        {
+            _repositoryMock.Setup(x => x.IsLastAdministratorAsync("admin-1")).ReturnsAsync(true);
+
+            Func<Task> act = () => _service.DeleteUserAsync("admin-1", ClaimsPrincipalTestHelper.CreateAdmin("admin-1"));
+
+            await act.Should().ThrowAsync<ConflictException>();
+            _repositoryMock.Verify(x => x.DeleteAsync(It.IsAny<string>()), Times.Never);
+        }
+
+        // ── CreateUserAsync ──────────────────────────────────────────────────
+
+        private static CreateUserRequestDto NewCreateDto(string role, string? email, string? phone) => new()
+        {
+            FirstName = "Ana", LastName = "Silva", Age = 30,
+            Password = "Senha@123", PasswordConfirm = "Senha@123",
+            Role = role, Email = email, PhoneNumber = phone
+        };
+
+        [Fact]
+        public async Task CreateUserAsync_WhenDtoIsNull_ShouldThrowArgumentNullException()
+        {
+            Func<Task> act = () => _service.CreateUserAsync(null!);
+
+            await act.Should().ThrowAsync<ArgumentNullException>();
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenAdministratorWithoutEmail_ShouldThrowBadRequestException()
+        {
+            Func<Task> act = () => _service.CreateUserAsync(NewCreateDto("Administrator", null, null));
+
+            await act.Should().ThrowAsync<BadRequestException>();
+            _identityMock.Verify(x => x.RegisterAdmin(It.IsAny<CreateAccountRequestDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenUserWithoutPhone_ShouldThrowBadRequestException()
+        {
+            Func<Task> act = () => _service.CreateUserAsync(NewCreateDto("User", "a@b.com", null));
+
+            await act.Should().ThrowAsync<BadRequestException>();
+            _identityMock.Verify(x => x.RegisterUser(It.IsAny<CreateAccountRequestDto>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenRoleIsUnknown_ShouldThrowBadRequestException()
+        {
+            Func<Task> act = () => _service.CreateUserAsync(NewCreateDto("Root", "a@b.com", "+5511987654312"));
+
+            await act.Should().ThrowAsync<BadRequestException>();
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenPasswordsDoNotMatch_ShouldThrowBadRequestException()
+        {
+            var dto = NewCreateDto("Administrator", "admin@teste.com", null);
+            dto.PasswordConfirm = "outra";
+            _accountRepositoryMock.Setup(x => x.EmailUserExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
+
+            Func<Task> act = () => _service.CreateUserAsync(dto);
+
+            await act.Should().ThrowAsync<BadRequestException>();
+            _identityMock.Verify(x => x.RegisterAdmin(It.IsAny<CreateAccountRequestDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenAdministratorEmailAlreadyExists_ShouldThrowBadRequestException()
+        {
+            var dto = NewCreateDto("Administrator", "admin@teste.com", null);
+            _accountRepositoryMock.Setup(x => x.EmailUserExistsAsync("admin@teste.com")).ReturnsAsync(true);
+
+            Func<Task> act = () => _service.CreateUserAsync(dto);
+
+            await act.Should().ThrowAsync<BadRequestException>();
+            _identityMock.Verify(x => x.RegisterAdmin(It.IsAny<CreateAccountRequestDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenAdministratorHasPhoneNumber_ShouldThrowBadRequestException()
+        {
+            var dto = NewCreateDto("Administrator", "admin@teste.com", "+5511987654312");
+
+            Func<Task> act = () => _service.CreateUserAsync(dto);
+
+            (await act.Should().ThrowAsync<BadRequestException>()).WithMessage("Administrador é cadastrado só com e-mail.");
+            _identityMock.Verify(x => x.RegisterAdmin(It.IsAny<CreateAccountRequestDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenUserEmailAlreadyExists_ShouldThrowBadRequestException()
+        {
+            var dto = NewCreateDto("User", "dup@teste.com", "(11) 98765-4312");
+            string? formatted = "+5511987654312";
+            _phoneMock.Setup(x => x.TryValidateAndFormat(It.IsAny<string?>(), "BR", out formatted)).Returns(true);
+            _accountRepositoryMock.Setup(x => x.PhoneExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
+            _accountRepositoryMock.Setup(x => x.EmailUserExistsAsync("dup@teste.com")).ReturnsAsync(true);
+
+            Func<Task> act = () => _service.CreateUserAsync(dto);
+
+            (await act.Should().ThrowAsync<BadRequestException>()).WithMessage("*E-mail já cadastrado*");
+            _identityMock.Verify(x => x.RegisterUser(It.IsAny<CreateAccountRequestDto>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenUserEmailIsFree_ShouldCallRegisterUser()
+        {
+            var dto = NewCreateDto("User", "livre@teste.com", "(11) 98765-4312");
+            string? formatted = "+5511987654312";
+            var created = new User { Id = "new-user" };
+            var expected = new UserResponseDto { UserId = "new-user" };
+
+            _phoneMock.Setup(x => x.TryValidateAndFormat(It.IsAny<string?>(), "BR", out formatted)).Returns(true);
+            _accountRepositoryMock.Setup(x => x.PhoneExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
+            _accountRepositoryMock.Setup(x => x.EmailUserExistsAsync("livre@teste.com")).ReturnsAsync(false);
+            _identityMock.Setup(x => x.RegisterUser(It.IsAny<CreateAccountRequestDto>(), "+5511987654312")).ReturnsAsync(new List<IdentityError>());
+            _identityMock.Setup(x => x.FindByNameAsync("+5511987654312")).ReturnsAsync(created);
+            _repositoryMock.Setup(x => x.GetByIdAsync("new-user")).ReturnsAsync(expected);
+
+            var result = await _service.CreateUserAsync(dto);
+
+            result.Should().Be(expected);
+            _identityMock.Verify(x => x.RegisterUser(It.IsAny<CreateAccountRequestDto>(), "+5511987654312"), Times.Once);
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenValidAdministrator_ShouldCallRegisterAdminAndReturnCreatedUser()
+        {
+            var dto = NewCreateDto("Administrator", "admin@teste.com", null);
+            var created = new User { Id = "new-admin" };
+            var expected = new UserResponseDto { UserId = "new-admin" };
+
+            _accountRepositoryMock.Setup(x => x.EmailUserExistsAsync("admin@teste.com")).ReturnsAsync(false);
+            _identityMock.Setup(x => x.RegisterAdmin(It.IsAny<CreateAccountRequestDto>())).ReturnsAsync(new List<IdentityError>());
+            _identityMock.Setup(x => x.FindByNameAsync("admin@teste.com")).ReturnsAsync(created);
+            _repositoryMock.Setup(x => x.GetByIdAsync("new-admin")).ReturnsAsync(expected);
+
+            var result = await _service.CreateUserAsync(dto);
+
+            result.Should().Be(expected);
+            _identityMock.Verify(x => x.RegisterAdmin(It.Is<CreateAccountRequestDto>(a => a.Email == "admin@teste.com")), Times.Once);
+            _identityMock.Verify(x => x.RegisterUser(It.IsAny<CreateAccountRequestDto>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenValidUser_ShouldCallRegisterUserWithFormattedPhone()
+        {
+            var dto = NewCreateDto("User", null, "(11) 98765-4312");
+            string? formatted = "+5511987654312";
+            var created = new User { Id = "new-user" };
+            var expected = new UserResponseDto { UserId = "new-user" };
+
+            _phoneMock.Setup(x => x.TryValidateAndFormat("(11) 98765-4312", "BR", out formatted)).Returns(true);
+            _accountRepositoryMock.Setup(x => x.PhoneExistsAsync("+5511987654312")).ReturnsAsync(false);
+            _identityMock.Setup(x => x.RegisterUser(It.IsAny<CreateAccountRequestDto>(), "+5511987654312")).ReturnsAsync(new List<IdentityError>());
+            _identityMock.Setup(x => x.FindByNameAsync("+5511987654312")).ReturnsAsync(created);
+            _repositoryMock.Setup(x => x.GetByIdAsync("new-user")).ReturnsAsync(expected);
+
+            var result = await _service.CreateUserAsync(dto);
+
+            result.Should().Be(expected);
+            _identityMock.Verify(x => x.RegisterUser(It.IsAny<CreateAccountRequestDto>(), "+5511987654312"), Times.Once);
+            _identityMock.Verify(x => x.RegisterAdmin(It.IsAny<CreateAccountRequestDto>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenUserPhoneAlreadyExists_ShouldThrowBadRequestException()
+        {
+            var dto = NewCreateDto("User", null, "(11) 98765-4312");
+            string? formatted = "+5511987654312";
+            _phoneMock.Setup(x => x.TryValidateAndFormat(It.IsAny<string?>(), "BR", out formatted)).Returns(true);
+            _accountRepositoryMock.Setup(x => x.PhoneExistsAsync("+5511987654312")).ReturnsAsync(true);
+
+            Func<Task> act = () => _service.CreateUserAsync(dto);
+
+            await act.Should().ThrowAsync<BadRequestException>();
+            _identityMock.Verify(x => x.RegisterUser(It.IsAny<CreateAccountRequestDto>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateUserAsync_WhenIdentityReturnsErrors_ShouldThrowBadRequestException()
+        {
+            var dto = NewCreateDto("Administrator", "admin@teste.com", null);
+            _accountRepositoryMock.Setup(x => x.EmailUserExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
+            _identityMock.Setup(x => x.RegisterAdmin(It.IsAny<CreateAccountRequestDto>()))
+                .ReturnsAsync(new List<IdentityError> { new() { Code = "PasswordTooShort", Description = "curta" } });
+
+            Func<Task> act = () => _service.CreateUserAsync(dto);
+
+            (await act.Should().ThrowAsync<BadRequestException>()).WithMessage("*PasswordTooShort*");
         }
 
         // ── Permissions ──────────────────────────────────────────────────────
