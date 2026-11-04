@@ -78,42 +78,42 @@ namespace FamilyVaultApi.Migrations
                         {
                             CategoryId = 1,
                             CategoryPurposeId = 2,
-                            CreatedAt = new DateTime(2026, 8, 20, 17, 15, 34, 331, DateTimeKind.Utc).AddTicks(1966),
+                            CreatedAt = new DateTime(2026, 8, 20, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Salário"
                         },
                         new
                         {
                             CategoryId = 2,
                             CategoryPurposeId = 1,
-                            CreatedAt = new DateTime(2026, 8, 20, 17, 15, 34, 331, DateTimeKind.Utc).AddTicks(1967),
+                            CreatedAt = new DateTime(2026, 8, 20, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Alimentação"
                         },
                         new
                         {
                             CategoryId = 3,
                             CategoryPurposeId = 1,
-                            CreatedAt = new DateTime(2026, 8, 20, 17, 15, 34, 331, DateTimeKind.Utc).AddTicks(1968),
+                            CreatedAt = new DateTime(2026, 8, 20, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Transporte"
                         },
                         new
                         {
                             CategoryId = 4,
                             CategoryPurposeId = 1,
-                            CreatedAt = new DateTime(2026, 8, 20, 17, 15, 34, 331, DateTimeKind.Utc).AddTicks(1969),
+                            CreatedAt = new DateTime(2026, 8, 20, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Aporte em Investimentos"
                         },
                         new
                         {
                             CategoryId = 5,
                             CategoryPurposeId = 2,
-                            CreatedAt = new DateTime(2026, 8, 20, 17, 15, 34, 331, DateTimeKind.Utc).AddTicks(1970),
+                            CreatedAt = new DateTime(2026, 8, 20, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Rendimento em Investimentos"
                         },
                         new
                         {
                             CategoryId = 6,
                             CategoryPurposeId = 1,
-                            CreatedAt = new DateTime(2026, 8, 20, 17, 15, 34, 331, DateTimeKind.Utc).AddTicks(1971),
+                            CreatedAt = new DateTime(2026, 8, 20, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Lazer"
                         });
                 });
@@ -181,7 +181,7 @@ namespace FamilyVaultApi.Migrations
                         {
                             CategoryPurposeId = 1,
                             Code = "expense",
-                            CreatedAt = new DateTime(2026, 8, 20, 17, 15, 34, 331, DateTimeKind.Utc).AddTicks(1889),
+                            CreatedAt = new DateTime(2026, 8, 20, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Apenas para despesas",
                             IsActive = true,
                             Name = "Despesa"
@@ -190,7 +190,7 @@ namespace FamilyVaultApi.Migrations
                         {
                             CategoryPurposeId = 2,
                             Code = "income",
-                            CreatedAt = new DateTime(2026, 8, 20, 17, 15, 34, 331, DateTimeKind.Utc).AddTicks(1891),
+                            CreatedAt = new DateTime(2026, 8, 20, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Apenas para receitas",
                             IsActive = true,
                             Name = "Receita"
@@ -334,7 +334,7 @@ namespace FamilyVaultApi.Migrations
                         {
                             TransactionTypeId = 1,
                             Code = "expense",
-                            CreatedAt = new DateTime(2026, 8, 20, 17, 15, 34, 331, DateTimeKind.Utc).AddTicks(1942),
+                            CreatedAt = new DateTime(2026, 8, 20, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Saída de recursos",
                             IsActive = true,
                             Name = "Despesa"
@@ -343,7 +343,7 @@ namespace FamilyVaultApi.Migrations
                         {
                             TransactionTypeId = 2,
                             Code = "income",
-                            CreatedAt = new DateTime(2026, 8, 20, 17, 15, 34, 331, DateTimeKind.Utc).AddTicks(1944),
+                            CreatedAt = new DateTime(2026, 8, 20, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Entrada de recursos",
                             IsActive = true,
                             Name = "Receita"
@@ -489,12 +489,14 @@ namespace FamilyVaultApi.Migrations
                         new
                         {
                             Id = "5d92e12f-f00c-4899-ac98-89ea76712171",
+                            ConcurrencyStamp = "8f3c1a52-6b7e-4d19-9a40-2c5e7d1b3f68",
                             Name = "Administrator",
                             NormalizedName = "ADMINISTRATOR"
                         },
                         new
                         {
                             Id = "bad15740-437c-4721-839c-a9af6fbd3961",
+                            ConcurrencyStamp = "e2b94d07-1c58-4a63-b7f1-5d8a0c3e9246",
                             Name = "User",
                             NormalizedName = "USER"
                         });

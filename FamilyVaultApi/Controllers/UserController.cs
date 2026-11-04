@@ -1,11 +1,10 @@
-﻿using FamilyVaultApi.Common;
+using FamilyVaultApi.Common;
 using FamilyVaultApi.Models.Internal;
 using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Services.IService;
 using FamilyVaultApi.Models.Dto.Responses.User;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.OData.Results;
 using FamilyVaultApi.Models.Dto.Requests.User;
 
 namespace FamilyVaultApi.Controllers

@@ -2,8 +2,24 @@
 
 ![CI](https://github.com/Filipe-Saulo/Family-Vault-Api/actions/workflows/ci.yml/badge.svg)
 
-**Monolithic .NET 8 API** for managing users, accounts, categories, and transactions.
-Supports **web and mobile clients**.
+**Monolithic .NET 8 API** for managing users, accounts, categories, and transactions. It is the single owner of data and rules of **Family Vault**, serving two clients: the [web panel](https://github.com/Filipe-Saulo/Family-Vault-Web) (React, Administrator only) and the [mobile app](https://github.com/Filipe-Saulo/family-vault-app) (Expo).
+
+```mermaid
+flowchart LR
+    App["App (Expo)"] -->|"/app/*"| API["API (.NET 8)"]
+    Web["Web (React)"] -->|"/web/*"| API
+    API --> DB[("MySQL")]
+```
+
+## Highlights
+
+- Refresh token **per client** (web cookie / app body), with **reuse detection**: a reused token revokes every session
+- Account **lockout** (5 wrong passwords, 15 min) with a generic 401 that never reveals which accounts exist
+- Password recovery by 6-digit **code** sent by phone, with wrong guesses counting toward lockout
+- Categories are **global or personal**; changing or deleting one in use answers **409**
+- Standard error **envelope** (`ApiResponse<T>` with `traceId`), also for 401, 403 and 429
+- **Rate limiting** on auth endpoints
+- **269 unit tests** on the Service layer, run by CI on every push
 
 ---
 
@@ -49,18 +65,19 @@ cd FamilyVaultApi
 "JwtSettings": {
   "Issuer": "FamilyVaultApi",
   "Audience": "FamilyVaultApiClient",
-  "DurationInMinutes": 10,
-  "Key": "YOUR_SECRET_KEY_HERE"
+  "DurationInMinutes": 10
 }
 ```
 
-3. Apply database migrations:
+   The JWT signing key is not versioned. The API refuses to start if `JwtSettings:Key` is missing or has fewer than
+   32 bytes. In development, set it with user-secrets; in other environments, use the `JwtSettings__Key` environment variable:
 
 ```bash
-dotnet ef database update
+cd FamilyVaultApi
+dotnet user-secrets set "JwtSettings:Key" "<32+ characters>"
 ```
 
-4. Configure the first Administrator (only needed on an empty database; the account is created at startup when no
+3. Configure the first Administrator (only needed on an empty database; the account is created at startup when no
    Administrator exists). Use user-secrets, never `appsettings.json`:
 
 ```bash
@@ -72,13 +89,19 @@ dotnet user-secrets set "AdminSeed:Password" "ChangeMe123"
 Public sign-up (`POST /api/register`) only creates regular users by phone; further Administrators are created by an
 Administrator through `POST /api/User`.
 
+4. Apply database migrations:
+
+```bash
+dotnet ef database update
+```
+
 5. Run the API:
 
 ```bash
 dotnet run --project FamilyVaultApi
 ```
 
-6. Access Swagger UI:
+6. Access Swagger UI (Development environment only):
 
 - `http://localhost:5090/swagger`
 - `https://localhost:7072/swagger`
@@ -162,6 +185,8 @@ The `FamilyVaultApi.UnitTests` project (xUnit + Moq + FluentAssertions + Bogus) 
 ```bash
 dotnet test FamilyVaultApi.UnitTests
 ```
+
+There is no lint step; `dotnet build` is the static check (also run by CI).
 
 ## CI/CD
 

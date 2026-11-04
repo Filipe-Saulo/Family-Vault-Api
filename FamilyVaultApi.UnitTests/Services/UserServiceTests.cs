@@ -1,4 +1,4 @@
-using FamilyVaultApi.Exceptions;
+﻿using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Models.Dto.Requests.Account;
 using FamilyVaultApi.Models.Dto.Requests.User;
@@ -53,7 +53,6 @@ namespace FamilyVaultApi.UnitTests.Services
         [Theory]
         [InlineData(0)]
         [InlineData(-5)]
-        [InlineData(101)]
         public async Task GetUsersAsync_WhenPageSizeIsOutOfRange_ShouldNormalizeToTwenty(int pageSize)
         {
             var query = new UserQueryRequestDto { PageNumber = 1, PageSize = pageSize };
@@ -61,6 +60,21 @@ namespace FamilyVaultApi.UnitTests.Services
 
             _repositoryMock
                 .Setup(x => x.GetAllUsersAsync(It.Is<UserQueryRequestDto>(q => q.PageSize == 20)))
+                .ReturnsAsync(expected);
+
+            var result = await _service.GetUsersAsync(query);
+
+            result.Should().Be(expected);
+        }
+
+        [Fact]
+        public async Task GetUsersAsync_WhenPageSizeIsAboveMaximum_ShouldNormalizeToOneHundred()
+        {
+            var query = new UserQueryRequestDto { PageNumber = 1, PageSize = 101 };
+            var expected = new PagedResult<UserResponseDto>();
+
+            _repositoryMock
+                .Setup(x => x.GetAllUsersAsync(It.Is<UserQueryRequestDto>(q => q.PageSize == 100)))
                 .ReturnsAsync(expected);
 
             var result = await _service.GetUsersAsync(query);

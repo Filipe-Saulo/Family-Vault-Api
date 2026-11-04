@@ -113,7 +113,8 @@ namespace FamilyVaultApi.Services.Service
         {
 
             if (query.PageNumber <= 0) query.PageNumber = 1;
-            if (query.PageSize <= 0 || query.PageSize > 100) query.PageSize = 20;
+            if (query.PageSize <= 0) query.PageSize = 20;
+            else if (query.PageSize > 100) query.PageSize = 100;
 
             return await _userRepository.GetAllUsersAsync(query);
         }

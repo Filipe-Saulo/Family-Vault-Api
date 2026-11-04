@@ -1,4 +1,3 @@
-using Asp.Versioning;
 using AspNetCoreRateLimit;
 using FamilyVaultApi.Common;
 using FamilyVaultApi.Data;
@@ -13,7 +12,6 @@ using FamilyVaultApi.Services.Service;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.OData;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -22,6 +20,13 @@ using System.Security.Claims;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Fail fast, before anything touches the database.
+var jwtKey = builder.Configuration["JwtSettings:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32)
+    throw new InvalidOperationException(
+        "JwtSettings:Key ausente ou com menos de 32 bytes. Em desenvolvimento use 'dotnet user-secrets set \"JwtSettings:Key\" \"<32+ caracteres>\"'; nos demais ambientes, a variável JwtSettings__Key.");
+
 
 // Add services to the container.
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -96,26 +101,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-var apiVersioningBuilder = builder.Services.AddApiVersioning(options =>
-{
-    options.AssumeDefaultVersionWhenUnspecified = true;
-    options.DefaultApiVersion = new ApiVersion(1, 0); // Atualiza??o de namespace
-    options.ReportApiVersions = true;
-    options.ApiVersionReader = ApiVersionReader.Combine(
-        new QueryStringApiVersionReader("api-version"),
-        new HeaderApiVersionReader("X-Version"),
-        new MediaTypeApiVersionReader("ver")
-    );
-});
-
-apiVersioningBuilder.AddApiExplorer(
-    options =>
-    {
-        options.GroupNameFormat = "'v'VVV";
-        options.SubstituteApiVersionInUrl = true;
-    });
-
-
 builder.Host.UseSerilog((ctx, lc) => lc.WriteTo.Console().ReadFrom.Configuration(ctx.Configuration));
 
 builder.Services.AddIdentity<User, IdentityRole>(options =>
@@ -179,7 +164,7 @@ builder.Services.AddAuthentication(options =>
             ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
             ValidAudience = builder.Configuration["JwtSettings:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:Key"])
+                Encoding.UTF8.GetBytes(jwtKey)
             ),
             RoleClaimType = ClaimTypes.Role,
         };
@@ -188,11 +173,11 @@ builder.Services.AddAuthentication(options =>
         {
             OnChallenge = context =>
             {
-                context.HandleResponse(); 
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                context.Response.ContentType = "application/json";
-                return context.Response.WriteAsync("{\"message\":\"Acesso negado.\"}");
-            }
+                context.HandleResponse();
+                return ApiResponseWriter.WriteAsync(context.HttpContext, StatusCodes.Status401Unauthorized, "Acesso negado.");
+            },
+            OnForbidden = context =>
+                ApiResponseWriter.WriteAsync(context.HttpContext, StatusCodes.Status403Forbidden, "Você não tem permissão para acessar este recurso.")
         };
     });
 
@@ -220,10 +205,6 @@ builder.Services.AddControllers()
 
             return new BadRequestObjectResult(response);
         };
-    })
-    .AddOData(options =>
-    {
-        options.Select().Filter().OrderBy();
     });
 
 builder.Services.AddHealthChecks()
@@ -238,16 +219,18 @@ var app = builder.Build();
 
 await app.SeedAdministratorAsync();
 
-app.UseIpRateLimiting();
+app.UseMiddleware<ApiIpRateLimitMiddleware>();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
-
-app.UseSwagger();
-app.UseSwaggerUI();
+else
+{
+    app.UseHsts();
+}
 
 app.UseSerilogRequestLogging();
 

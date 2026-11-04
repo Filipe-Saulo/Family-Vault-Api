@@ -38,7 +38,6 @@ namespace FamilyVaultApi.Repositories.Repository
             var entity = _mapper.Map<Category>(dto);
             entity.UserId = userId;
             entity.CreatedAt = DateTime.UtcNow;
-            entity.UpdatedAt = DateTime.UtcNow;
 
 
             _context.Categories.Add(entity);
@@ -105,7 +104,6 @@ namespace FamilyVaultApi.Repositories.Repository
 
             entity.Description = dto.Description;
             entity.CategoryPurposeId = dto.CategoryPurposeId;
-            entity.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
