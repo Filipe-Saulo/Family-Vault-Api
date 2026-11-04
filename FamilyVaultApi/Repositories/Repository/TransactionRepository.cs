@@ -90,13 +90,13 @@ namespace FamilyVaultApi.Repositories.Repository
         {
             var entity = await _context.Transactions.FindAsync(id);
             if (entity == null)
-                throw new NotFoundException("Transaction", id);
+                throw new NotFoundException("Transação", id);
 
             if (!await _context.Categories.AnyAsync(x => x.CategoryId == dto.CategoryId))
-                throw new NotFoundException("Category não encontrada", dto.CategoryId);
+                throw new NotFoundException("Categoria", dto.CategoryId);
 
             if (!await _context.TransactionTypes.AnyAsync(x => x.TransactionTypeId == dto.TransactionTypeId))
-                throw new NotFoundException("TransactionType não encontrado", dto.TransactionTypeId);
+                throw new NotFoundException("Tipo de transação", dto.TransactionTypeId);
 
             entity.CategoryId = dto.CategoryId;
             entity.TransactionTypeId = dto.TransactionTypeId;
@@ -113,7 +113,7 @@ namespace FamilyVaultApi.Repositories.Repository
         {
             var entity = await _context.Transactions.FindAsync(id);
             if (entity == null)
-                throw new NotFoundException("Transaction", id);
+                throw new NotFoundException("Transação", id);
 
             _context.Transactions.Remove(entity);
             await _context.SaveChangesAsync();

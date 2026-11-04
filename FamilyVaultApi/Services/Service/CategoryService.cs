@@ -90,7 +90,7 @@ namespace FamilyVaultApi.Services.Service
         {
             var info = await _categoryRepository.GetAccessInfoAsync(categoryId);
             if (info == null)
-                throw new NotFoundException("Category", categoryId);
+                throw new NotFoundException("Categoria", categoryId);
 
             var canManageAny = userClaims.IsInRole("Administrator")
                 || userClaims.HasClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageCategories));
@@ -103,7 +103,7 @@ namespace FamilyVaultApi.Services.Service
             else if (!canManageAny && info.UserId != userClaims.FindFirst("uid")?.Value)
             {
                 // Categoria pessoal de outro usuário: 404 para não revelar que existe
-                throw new NotFoundException("Category", categoryId);
+                throw new NotFoundException("Categoria", categoryId);
             }
 
             return info;

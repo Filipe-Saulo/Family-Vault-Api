@@ -83,7 +83,7 @@ namespace FamilyVaultApi.Services.Service
 
             var ownerUserId = await _repository.GetOwnerUserIdAsync(id);
             if (ownerUserId == null)
-                throw new NotFoundException("Transaction", id);
+                throw new NotFoundException("Transação", id);
 
             await EnsureCategoryAvailableToUserAsync(dto.CategoryId, ownerUserId);
 
@@ -106,7 +106,7 @@ namespace FamilyVaultApi.Services.Service
 
             var ownerUserId = await _repository.GetOwnerUserIdAsync(transactionId);
             if (ownerUserId == null)
-                throw new NotFoundException("Transaction", transactionId);
+                throw new NotFoundException("Transação", transactionId);
 
             var callerId = userClaims.FindFirst("uid")?.Value;
             if (callerId != ownerUserId)
@@ -124,11 +124,11 @@ namespace FamilyVaultApi.Services.Service
         {
             var purpose = await _categoryRepository.GetPurposeCodeAsync(categoryId);
             if (purpose == null)
-                throw new NotFoundException("Category não encontrada", categoryId);
+                throw new NotFoundException("Categoria", categoryId);
 
             var type = await _transactionTypeRepository.GetCodeAsync(transactionTypeId);
             if (type == null)
-                throw new NotFoundException("TransactionType não encontrado", transactionTypeId);
+                throw new NotFoundException("Tipo de transação", transactionTypeId);
 
             if (purpose.Value.ToString() != type.Value.ToString())
                 throw new BadRequestException("O tipo de transação selecionado não é compatível com o propósito da categoria.");

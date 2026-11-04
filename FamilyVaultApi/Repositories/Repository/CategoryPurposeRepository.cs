@@ -58,7 +58,7 @@ namespace FamilyVaultApi.Repositories.Repository
         {
             var entity = await _context.CategoryPurposes.FindAsync(id);
             if (entity == null)
-                throw new NotFoundException("CategoryPurpose", id);
+                throw new NotFoundException("Finalidade", id);
 
             entity.Name = dto.Name;
             entity.Description = dto.Description;

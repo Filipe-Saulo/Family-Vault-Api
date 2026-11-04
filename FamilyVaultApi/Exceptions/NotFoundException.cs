@@ -2,7 +2,7 @@
 {
     public class NotFoundException : ApplicationException
     {
-        public NotFoundException(string name, object key) : base($"{name} with id ({key}) was not found")
+        public NotFoundException(string name, object key) : base($"Registro não encontrado: {name} (id {key}).")
         {
 
         }

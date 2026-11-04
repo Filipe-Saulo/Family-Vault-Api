@@ -94,7 +94,7 @@ namespace FamilyVaultApi.Services.Service
 
             var user = await _identityService.FindByIdAsync(userId);
             if (user == null)
-                throw new NotFoundException("Usuário não encontrado.", userId);
+                throw new NotFoundException("Usuário", userId);
 
             ThrowIfFailed(await _identityService.ResetPasswordAsync(user, dto.Password));
 

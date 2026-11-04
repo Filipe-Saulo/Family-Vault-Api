@@ -33,7 +33,7 @@ namespace FamilyVaultApi.Controllers
                 return BadRequest(ApiResponse<string>.BadRequest(string.Join(" | ", mensagens)));
             }
 
-            return Ok(ApiResponse<string>.Ok(null, "Usuário registrado com sucesso."));
+            return StatusCode(StatusCodes.Status201Created, ApiResponse<string>.Created(null, "Usuário registrado com sucesso."));
         }
 
         [HttpPost("web/login")]

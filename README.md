@@ -112,7 +112,7 @@ dotnet run --project FamilyVaultApi
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/register` | Public sign-up of a regular User, by phone only (an e-mail is rejected) |
+| POST | `/api/register` | Public sign-up of a regular User, by phone only (an e-mail is rejected); 201 on success |
 | POST | `/api/web/login` | Authenticate; refresh token set as an HttpOnly, `SameSite=Lax`, `Path=/api` cookie (the web panel calls the API through its own origin via a proxy) |
 | POST | `/api/app/login` | Authenticate; refresh token returned in the response body |
 | POST | `/api/logout` | Revoke the user's refresh tokens on both clients (web and app) and clear the cookie; body `{token}` (access token, may be expired) when not authenticated |
@@ -163,7 +163,7 @@ dotnet run --project FamilyVaultApi
 | DELETE | `/api/User/{id}` | Same as PUT; 409 for the last Administrator |
 | POST | `/api/User/{id}/password` | Administrator — sets a new password for the user (body `{password, passwordConfirm}`) and revokes their sessions |
 | GET | `/api/User/{userId}/permissions` | Administrator |
-| POST | `/api/User/{userId}/permissions` | Administrator |
+| POST | `/api/User/{userId}/permissions` | Administrator — body `{permission}`, the number (`4`) or the name (`"ManageUsers"`) |
 | DELETE | `/api/User/{userId}/permissions/{permission}` | Administrator |
 
 ### Dashboard
