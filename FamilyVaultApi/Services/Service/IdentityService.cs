@@ -15,17 +15,20 @@ namespace FamilyVaultApi.Services.Service
     {
         private readonly UserManager<User> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly IPhoneNumberService _phoneNumberService;
 
         // Provider próprio (validade de 7 dias); o Default fica com a validade padrão para o reset de senha
         private readonly string _loginProvider = RefreshTokenProvider.ProviderName;
         private const string _legacyRefreshTokenPurpose = "RefreshToken";
         private const string _webRefreshTokenPurpose = "RefreshToken-web";
         private const string _appRefreshTokenPurpose = "RefreshToken-app";
+        private const string _passwordResetCodePurpose = "ResetPasswordCode";
 
-        public IdentityService(UserManager<User> userManager, RoleManager<IdentityRole> roleManager)
+        public IdentityService(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, IPhoneNumberService phoneNumberService)
         {
             _userManager = userManager;
             _roleManager = roleManager;
+            _phoneNumberService = phoneNumberService;
         }
 
         public async Task<User?> FindUserByLoginAsync(LoginRequestDto loginDto)
@@ -34,9 +37,49 @@ namespace FamilyVaultApi.Services.Service
                 return await _userManager.Users.FirstOrDefaultAsync(u => u.UserName == loginDto.Email);
 
             if (!string.IsNullOrEmpty(loginDto.Phone))
-                return await _userManager.Users.FirstOrDefaultAsync(u => u.UserName == loginDto.Phone);
+            {
+                // O UserName guarda o telefone em E.164; telefone inválido cai no mesmo 401 genérico do login
+                if (!_phoneNumberService.TryValidateAndFormat(loginDto.Phone, "BR", out var phone))
+                    return null;
+
+                return await _userManager.Users.FirstOrDefaultAsync(u => u.UserName == phone);
+            }
 
             return null;
+        }
+
+        public async Task<User?> FindByPhoneAsync(string phoneE164)
+        {
+            return await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneE164);
+        }
+
+        public async Task<string> GeneratePasswordResetCodeAsync(User user)
+        {
+            return await _userManager.GenerateUserTokenAsync(user, TokenOptions.DefaultPhoneProvider, _passwordResetCodePurpose);
+        }
+
+        public async Task<bool> VerifyPasswordResetCodeAsync(User user, string code)
+        {
+            return await _userManager.VerifyUserTokenAsync(user, TokenOptions.DefaultPhoneProvider, _passwordResetCodePurpose, code);
+        }
+
+        public async Task<IEnumerable<IdentityError>> ResetPasswordAsync(User user, string newPassword)
+        {
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+            return result.Succeeded ? Enumerable.Empty<IdentityError>() : result.Errors;
+        }
+
+        public async Task<IEnumerable<IdentityError>> ChangePasswordAsync(User user, string currentPassword, string newPassword)
+        {
+            var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+            return result.Succeeded ? Enumerable.Empty<IdentityError>() : result.Errors;
+        }
+
+        public async Task UnlockAsync(User user)
+        {
+            await _userManager.ResetAccessFailedCountAsync(user);
+            await _userManager.SetLockoutEndDateAsync(user, null);
         }
 
         public async Task<bool> CheckPasswordAsync(User user, string password)

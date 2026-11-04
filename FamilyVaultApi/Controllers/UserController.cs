@@ -15,10 +15,12 @@ namespace FamilyVaultApi.Controllers
     public class UserController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly IPasswordService _passwordService;
 
-        public UserController(IUserService userService)
+        public UserController(IUserService userService, IPasswordService passwordService)
         {
             _userService = userService;
+            _passwordService = passwordService;
         }
 
         [HttpGet]
@@ -59,6 +61,14 @@ namespace FamilyVaultApi.Controllers
         {
             await _userService.DeleteUserAsync(id, User);
             return Ok(ApiResponse<object>.Ok(null, "Usuário excluído com sucesso"));
+        }
+
+        [HttpPost("{id}/password")]
+        [Authorize(Roles = "Administrator")]
+        public async Task<ActionResult<ApiResponse<object>>> SetPassword([FromRoute] string id, [FromBody] SetUserPasswordRequestDto dto)
+        {
+            await _passwordService.SetUserPasswordAsync(id, dto);
+            return Ok(ApiResponse<object>.Ok(null, "Senha do usuário alterada com sucesso"));
         }
 
         [HttpGet("{userId}/permissions")]

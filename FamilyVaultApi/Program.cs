@@ -130,6 +130,7 @@ builder.Services.AddIdentity<User, IdentityRole>(options =>
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.Lockout.AllowedForNewUsers = true;
 })
+.AddErrorDescriber<PortugueseIdentityErrorDescriber>()
 .AddEntityFrameworkStores<DatabaseContext>()
 .AddDefaultTokenProviders()
 .AddTokenProvider<RefreshTokenProvider>(RefreshTokenProvider.ProviderName);
@@ -141,6 +142,8 @@ builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IIdentityService, IdentityService>();
 builder.Services.AddSingleton<IPhoneNumberService, PhoneNumberService>();
+builder.Services.AddScoped<IPasswordService, PasswordService>();
+builder.Services.AddSingleton<IVerificationCodeSender, LoggingVerificationCodeSender>();
 //user
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();

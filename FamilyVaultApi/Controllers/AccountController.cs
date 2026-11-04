@@ -109,13 +109,6 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<AuthResponseDto>.Ok(responseDto));
         }
 
-        [HttpPost("resetPassword")]
-        public async Task<ActionResult<ApiResponse<object>>> ResetPassword([FromBody] PasswordResetRequestDto passwordResetDto)
-        {
-            await _accountService.ResetPasswordAsync(passwordResetDto, User);
-            return Ok(ApiResponse<object>.Ok(null, "Senha alterada com sucesso"));
-        }
-
         private void SetRefreshTokenCookie(string token)
         {
             Response.Cookies.Append("refreshToken", token, new CookieOptions

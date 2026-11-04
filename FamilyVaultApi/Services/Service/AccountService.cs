@@ -197,27 +197,5 @@ namespace FamilyVaultApi.Services.Service
 
             await _identityService.LogoutAsync(userId);
         }
-
-        public async Task ResetPasswordAsync(PasswordResetRequestDto dto, ClaimsPrincipal userClaims)
-        {
-            if (dto.Password != dto.PasswordConfirm)
-                throw new BadRequestException("A senha e a confirmação de senha não coincidem.");
-
-            if (string.IsNullOrWhiteSpace(dto.Phone))
-                throw new BadRequestException("Número de telefone é obrigatório.");
-
-            var user = await _repository.FindByPhoneAsync(dto.Phone);
-            if (user == null)
-                throw new NotFoundException("Usuário não encontrado.", dto.Phone);
-
-            bool isLogged = userClaims?.Identity?.IsAuthenticated == true;
-            bool isAdmin = isLogged && userClaims.IsInRole("Administrator");
-            string? uid = isLogged ? userClaims.FindFirst("uid")?.Value : null;
-
-            if (isLogged && !isAdmin && uid != user.Id)
-                throw new SecurityException("Você não tem permissão para acessar este recurso.");
-
-            await _repository.UpdatePasswordAsync(user, dto.Password);
-        }
     }
 }
