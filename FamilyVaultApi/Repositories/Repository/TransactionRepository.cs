@@ -25,15 +25,8 @@ namespace FamilyVaultApi.Repositories.Repository
 
         public async Task<TransactionResponseDto> AddAsync(CreateTransactionDto dto)
         {
-            if (!await _context.Categories.AnyAsync(x => x.CategoryId == dto.CategoryId))
-                throw new NotFoundException("Category não encontrada", dto.CategoryId);
-
-            if (!await _context.TransactionTypes.AnyAsync(x => x.TransactionTypeId == dto.TransactionTypeId))
-                throw new NotFoundException("TransactionType não encontrado", dto.TransactionTypeId);
-
             var entity = _mapper.Map<Transaction>(dto);
             entity.CreatedAt = DateTime.UtcNow;
-            entity.UpdatedAt = DateTime.UtcNow;
 
             _context.Transactions.Add(entity);
             await _context.SaveChangesAsync();
@@ -110,7 +103,6 @@ namespace FamilyVaultApi.Repositories.Repository
             entity.Description = dto.Description;
             entity.Amount = dto.Amount;
             entity.TransactionDate = dto.TransactionDate;
-            entity.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 

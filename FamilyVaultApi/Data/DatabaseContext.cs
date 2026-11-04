@@ -47,6 +47,9 @@ namespace FamilyVaultApi.Data
 
         }
 
+        // Data fixa dos seeds: com UtcNow cada migration nova geraria UpdateData sem mudança real
+        private static readonly DateTime SeedDate = new DateTime(2026, 8, 20, 0, 0, 0, DateTimeKind.Utc);
+
         private void SeedData(ModelBuilder modelBuilder)
         {
             // Seed category purposes
@@ -58,7 +61,7 @@ namespace FamilyVaultApi.Data
                     Name = "Despesa",
                     Description = "Apenas para despesas",
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = SeedDate
                 },
                 new CategoryPurpose
                 {
@@ -67,7 +70,7 @@ namespace FamilyVaultApi.Data
                     Name = "Receita",
                     Description = "Apenas para receitas",
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = SeedDate
                 }
             );
 
@@ -80,7 +83,7 @@ namespace FamilyVaultApi.Data
                     Name = "Despesa",
                     Description = "Saída de recursos",
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = SeedDate
                 },
                 new TransactionType
                 {
@@ -89,7 +92,7 @@ namespace FamilyVaultApi.Data
                     Name = "Receita",
                     Description = "Entrada de recursos",
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = SeedDate
                 }
             );
 
@@ -100,42 +103,42 @@ namespace FamilyVaultApi.Data
                     CategoryId = 1,
                     Description = "Salário",
                     CategoryPurposeId = 2, // income
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = SeedDate
                 },
                 new Category
                 {
                     CategoryId = 2,
                     Description = "Alimentação",
                     CategoryPurposeId = 1, // expense
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = SeedDate
                 },
                 new Category
                 {
                     CategoryId = 3,
                     Description = "Transporte",
                     CategoryPurposeId = 1, // expense
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = SeedDate
                 },
                 new Category
                 {
                     CategoryId = 4,
                     Description = "Aporte em Investimentos",
                     CategoryPurposeId = 1, // expense
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = SeedDate
                 },
                 new Category
                 {
                     CategoryId = 5,
                     Description = "Rendimento em Investimentos",
                     CategoryPurposeId = 2, // income
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = SeedDate
                 },
                 new Category
                 {
                     CategoryId = 6,
                     Description = "Lazer",
                     CategoryPurposeId = 1, // expense
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = SeedDate
                 }
             );
 
