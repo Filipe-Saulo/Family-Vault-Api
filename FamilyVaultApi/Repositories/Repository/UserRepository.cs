@@ -64,6 +64,8 @@ namespace FamilyVaultApi.Repositories.Repository
                 .ProjectTo<UserResponseDto>(_mapper.ConfigurationProvider)
                 .ToListAsync();
 
+            await FillRolesAsync(items);
+
             return new PagedResult<UserResponseDto>
             {
                 TotalCount = totalCount,
@@ -84,6 +86,8 @@ namespace FamilyVaultApi.Repositories.Repository
             if (user == null)
                 throw new NotFoundException("Usuário", userId);
 
+            await FillRolesAsync(new[] { user });
+
             return user;
         }
 
@@ -101,7 +105,60 @@ namespace FamilyVaultApi.Repositories.Repository
 
             await _context.SaveChangesAsync();
 
-            return _mapper.Map<UserResponseDto>(entity);
+            var updated = _mapper.Map<UserResponseDto>(entity);
+            await FillRolesAsync(new[] { updated });
+
+            return updated;
+        }
+
+        // O login procura a conta pelo UserName, então o papel e o UserName mudam juntos.
+        public async Task ChangeRoleAsync(User user, string role, string userName, string? email, string? phoneNumber)
+        {
+            // EnableRetryOnFailure exige que a transação manual rode dentro da execution strategy.
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+
+                // Numa nova tentativa, descarta o ConcurrencyStamp da tentativa desfeita pelo rollback
+                await _context.Entry(user).ReloadAsync();
+
+                if (email != null)
+                    EnsureSucceeded(await _userManager.SetEmailAsync(user, email));
+
+                if (phoneNumber != null)
+                    EnsureSucceeded(await _userManager.SetPhoneNumberAsync(user, phoneNumber));
+
+                EnsureSucceeded(await _userManager.SetUserNameAsync(user, userName));
+                EnsureSucceeded(await _userManager.RemoveFromRolesAsync(user, await _userManager.GetRolesAsync(user)));
+                EnsureSucceeded(await _userManager.AddToRoleAsync(user, role));
+
+                user.UpdatedAt = DateTime.UtcNow;
+                EnsureSucceeded(await _userManager.UpdateAsync(user));
+
+                await transaction.CommitAsync();
+            });
+        }
+
+        private static void EnsureSucceeded(IdentityResult result)
+        {
+            if (!result.Succeeded)
+                throw new BadRequestException(string.Join(" | ", result.Errors.Select(e => $"{e.Code}: {e.Description}")));
+        }
+
+        private async Task FillRolesAsync(IReadOnlyCollection<UserResponseDto> users)
+        {
+            var userIds = users.Select(u => u.UserId).ToList();
+
+            var roles = await (
+                from userRole in _context.UserRoles
+                join role in _context.Roles on userRole.RoleId equals role.Id
+                where userIds.Contains(userRole.UserId)
+                select new { userRole.UserId, role.Name }
+            ).ToListAsync();
+
+            foreach (var user in users)
+                user.Role = roles.FirstOrDefault(r => r.UserId == user.UserId)?.Name;
         }
 
         public async Task DeleteAsync(string userId)
