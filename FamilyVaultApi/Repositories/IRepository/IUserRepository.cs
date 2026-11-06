@@ -1,4 +1,5 @@
-﻿using FamilyVaultApi.Models.Dto.Requests.User;
+﻿using FamilyVaultApi.Data.Entities;
+using FamilyVaultApi.Models.Dto.Requests.User;
 using FamilyVaultApi.Models.Dto.Responses.User;
 using FamilyVaultApi.Models.Internal;
 using FamilyVaultApi.Models.Internal.Enums;
@@ -11,6 +12,7 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<UserResponseDto> GetByIdAsync(string userId);
         Task<UserResponseDto> UpdateAsync(string userId, UpdateUserDto dto);
         Task DeleteAsync(string userId);
+        Task ChangeRoleAsync(User user, string role, string userName, string? email, string? phoneNumber);
         Task<bool> IsLastAdministratorAsync(string userId);
         Task<bool> IsAdministratorAsync(string userId);
         Task<List<PermissionCode>> GetPermissionsAsync(string userId);

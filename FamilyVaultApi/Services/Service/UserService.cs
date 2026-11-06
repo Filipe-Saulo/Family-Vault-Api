@@ -155,6 +155,87 @@ namespace FamilyVaultApi.Services.Service
             await _userRepository.DeleteAsync(userId);
         }
 
+        public async Task<UserResponseDto> ChangeRoleAsync(string userId, ChangeUserRoleDto dto, ClaimsPrincipal userClaims)
+        {
+            if (dto == null)
+                throw new ArgumentNullException(nameof(dto));
+
+            if (dto.Role != "Administrator" && dto.Role != "User")
+                throw new BadRequestException("O papel deve ser Administrator ou User.");
+
+            if (userClaims.FindFirst("uid")?.Value == userId)
+                throw new BadRequestException("Você não pode alterar o próprio papel.");
+
+            var user = await _identityService.FindByIdAsync(userId);
+            if (user == null)
+                throw new NotFoundException("Usuário", userId);
+
+            var (isAdmin, isUser) = await _identityService.GetRolesAsync(user);
+            var toAdmin = dto.Role == "Administrator";
+            var alreadyInRole = toAdmin ? isAdmin : (isUser && !isAdmin);
+
+            if (alreadyInRole)
+                return await _userRepository.GetByIdAsync(userId);
+
+            if (isAdmin && await _userRepository.IsLastAdministratorAsync(userId))
+                throw new ConflictException("Não é possível rebaixar o último administrador.");
+
+            string? newEmail = null;
+            string? newPhone = null;
+            string login;
+
+            if (toAdmin)
+            {
+                if (string.IsNullOrEmpty(user.Email))
+                    newEmail = await ValidateNewEmailAsync(dto.Email);
+
+                login = newEmail ?? user.Email!;
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(user.PhoneNumber))
+                    newPhone = await ValidateNewPhoneAsync(dto.PhoneNumber);
+
+                login = newPhone ?? user.PhoneNumber!;
+            }
+
+            await _userRepository.ChangeRoleAsync(user, dto.Role, login, newEmail, newPhone);
+            await _identityService.RevokeRefreshTokensAsync(user);
+
+            return await _userRepository.GetByIdAsync(userId);
+        }
+
+        private async Task<string> ValidateNewEmailAsync(string? email)
+        {
+            // vira UserName: com espaço sobrando, o login por e-mail não encontraria a conta
+            email = email?.Trim();
+
+            if (string.IsNullOrEmpty(email))
+                throw new BadRequestException("O e-mail é obrigatório para Administrator.");
+
+            if (!EmailValidator.Validar(email))
+                throw new BadRequestException("E-mail inválido.");
+
+            if (await _accountRepository.EmailUserExistsAsync(email))
+                throw new BadRequestException("E-mail já cadastrado.");
+
+            return email;
+        }
+
+        private async Task<string> ValidateNewPhoneAsync(string? phone)
+        {
+            if (string.IsNullOrEmpty(phone))
+                throw new BadRequestException("O telefone é obrigatório para User.");
+
+            if (!_phoneNumberService.TryValidateAndFormat(phone, "BR", out var formatted))
+                throw new BadRequestException("Telefone inválido.");
+
+            if (await _accountRepository.PhoneExistsAsync(formatted!))
+                throw new BadRequestException("Número já cadastrado.");
+
+            return formatted!;
+        }
+
         // Administrator mexe em qualquer usuário; ManageUsers, em si e em contas que não são Administrator; os demais, só em si.
         private async Task EnsureCanModifyUserAsync(string userId, ClaimsPrincipal userClaims)
         {

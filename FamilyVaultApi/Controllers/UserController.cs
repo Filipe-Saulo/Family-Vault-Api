@@ -62,6 +62,14 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<object>.Ok(null, "Usuário excluído com sucesso"));
         }
 
+        [HttpPut("{id}/role")]
+        [Authorize(Roles = "Administrator")]
+        public async Task<ActionResult<ApiResponse<UserResponseDto>>> ChangeRole([FromRoute] string id, [FromBody] ChangeUserRoleDto dto)
+        {
+            var result = await _userService.ChangeRoleAsync(id, dto, User);
+            return Ok(ApiResponse<UserResponseDto>.Ok(result, "Papel alterado com sucesso"));
+        }
+
         [HttpPost("{id}/password")]
         [Authorize(Roles = "Administrator")]
         public async Task<ActionResult<ApiResponse<object>>> SetPassword([FromRoute] string id, [FromBody] SetUserPasswordRequestDto dto)

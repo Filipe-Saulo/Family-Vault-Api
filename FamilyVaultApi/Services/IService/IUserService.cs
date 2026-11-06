@@ -13,6 +13,7 @@ namespace FamilyVaultApi.Services.IService
         Task<UserResponseDto> CreateUserAsync(CreateUserRequestDto dto);
         Task<UserResponseDto> UpdateUserAsync(string userId, UpdateUserDto dto, ClaimsPrincipal userClaims);
         Task DeleteUserAsync(string userId, ClaimsPrincipal userClaims);
+        Task<UserResponseDto> ChangeRoleAsync(string userId, ChangeUserRoleDto dto, ClaimsPrincipal userClaims);
         Task<List<PermissionCode>> GetPermissionsAsync(string userId);
         Task GrantPermissionAsync(string userId, PermissionCode permission);
         Task RevokePermissionAsync(string userId, PermissionCode permission);

@@ -24,7 +24,8 @@ namespace FamilyVaultApi.Mapping
                 .ForMember(dest => dest.Age,
                     opt => opt.MapFrom(src => src.Age))
                 .ForMember(dest => dest.UserId,
-                    opt => opt.MapFrom(src => src.Id));
+                    opt => opt.MapFrom(src => src.Id))
+                .ForMember(dest => dest.Role, opt => opt.Ignore()); // preenchido pelo UserRepository
 
             CreateMap<CreateCategoryDto, Category>()
                 .ForMember(d => d.UserId, opt => opt.Ignore())
