@@ -22,6 +22,7 @@ namespace FamilyVaultApi.UnitTests.Services
     {
         private readonly Mock<IAccountRepository> _repositoryMock;
         private readonly Mock<IIdentityService> _identityServiceMock;
+        private readonly Mock<IRefreshTokenService> _refreshTokenServiceMock = new();
         private readonly Mock<ITokenService> _tokenServiceMock;
         private readonly Mock<IPhoneNumberService> _phoneNumberServiceMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
@@ -49,7 +50,7 @@ namespace FamilyVaultApi.UnitTests.Services
                 .Returns(true);
         }
 
-        private AccountService CreateService() => new(_repositoryMock.Object, _identityServiceMock.Object, _httpContextAccessorMock.Object, _tokenServiceMock.Object, _phoneNumberServiceMock.Object);
+        private AccountService CreateService() => new(_repositoryMock.Object, _identityServiceMock.Object, _tokenServiceMock.Object, _phoneNumberServiceMock.Object, _refreshTokenServiceMock.Object);
 
         private static User CreateUserEntity(string id = "user-1", string? email = null, string? phoneNumber = null) => new()
         {
@@ -243,7 +244,7 @@ namespace FamilyVaultApi.UnitTests.Services
             _identityServiceMock.Setup(x => x.GetRolesAsync(user)).ReturnsAsync((true, false));
             _identityServiceMock.Setup(x => x.GetUserClaimsAsync(user)).ReturnsAsync(new List<Claim>());
             _identityServiceMock.Setup(x => x.GetRoleClaimsAsync("Administrator")).ReturnsAsync(new List<Claim>());
-            _identityServiceMock.Setup(x => x.CreateRefreshTokenAsync(user, AuthClient.Web)).ReturnsAsync("refresh");
+            _refreshTokenServiceMock.Setup(x => x.CreateSessionAsync(user.Id, AuthClient.Web)).ReturnsAsync("refresh");
 
             await CreateService().LoginAsync(dto, AuthClient.Web);
 
@@ -277,7 +278,7 @@ namespace FamilyVaultApi.UnitTests.Services
             _identityServiceMock.Setup(x => x.GetRolesAsync(user)).ReturnsAsync((true, false));
             _identityServiceMock.Setup(x => x.GetUserClaimsAsync(user)).ReturnsAsync(new List<Claim>());
             _identityServiceMock.Setup(x => x.GetRoleClaimsAsync("Administrator")).ReturnsAsync(new List<Claim>());
-            _identityServiceMock.Setup(x => x.CreateRefreshTokenAsync(user, client)).ReturnsAsync("refresh-token");
+            _refreshTokenServiceMock.Setup(x => x.CreateSessionAsync(user.Id, client)).ReturnsAsync("refresh-token");
             _tokenServiceMock.Setup(x => x.GenerateAccessToken(It.Is<TokenClaimsData>(d => d.UserId == "user-1" && d.IsAdmin)))
                 .Returns("access-token");
 
@@ -286,8 +287,7 @@ namespace FamilyVaultApi.UnitTests.Services
             result.UserId.Should().Be("user-1");
             result.Token.Should().Be("access-token");
             result.RefreshToken.Should().Be("refresh-token");
-            _identityServiceMock.Verify(x => x.CreateRefreshTokenAsync(user, client), Times.Once);
-            _identityServiceMock.Verify(x => x.CreateRefreshTokenAsync(user, It.Is<AuthClient>(c => c != client)), Times.Never);
+            _refreshTokenServiceMock.Verify(x => x.CreateSessionAsync(user.Id, client), Times.Once);
             _identityServiceMock.Verify(x => x.UpdateLastLoginAsync(user), Times.Once);
         }
 
@@ -358,31 +358,28 @@ namespace FamilyVaultApi.UnitTests.Services
             var user = CreateUserEntity(id: "user-1", email: "user@example.com");
             _identityServiceMock.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(user);
             _identityServiceMock.Setup(x => x.IsLockedOutAsync(user)).ReturnsAsync(true);
-            _identityServiceMock.Setup(x => x.VerifyRefreshTokenAsync(user, client, request.RefreshToken)).ReturnsAsync(true);
 
             Func<Task> act = () => CreateService().RefreshTokenAsync(request, client);
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>();
-            _identityServiceMock.Verify(x => x.RevokeRefreshTokensAsync(It.IsAny<User>()), Times.Never);
-            _identityServiceMock.Verify(x => x.CreateRefreshTokenAsync(It.IsAny<User>(), It.IsAny<AuthClient>()), Times.Never);
+            _refreshTokenServiceMock.Verify(x => x.RotateAsync(It.IsAny<string>(), It.IsAny<AuthClient>(), It.IsAny<string>()), Times.Never);
         }
 
         [Theory]
         [InlineData(AuthClient.Web)]
         [InlineData(AuthClient.App)]
-        public async Task RefreshTokenAsync_WhenRefreshTokenIsInvalid_ShouldRevokeAllRefreshTokensAndThrowUnauthorized(AuthClient client)
+        public async Task RefreshTokenAsync_WhenRotationFails_ShouldThrowUnauthorizedWithoutIssuingAccessToken(AuthClient client)
         {
             var request = RefreshTokenRequestBuilder.New().WithToken("token-valido").Build();
             SetUpPrincipal(request.Token, "user-1");
             var user = CreateUserEntity(id: "user-1", email: "user@example.com");
             _identityServiceMock.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(user);
-            _identityServiceMock.Setup(x => x.VerifyRefreshTokenAsync(user, client, request.RefreshToken)).ReturnsAsync(false);
+            _refreshTokenServiceMock.Setup(x => x.RotateAsync("user-1", client, request.RefreshToken)).ReturnsAsync((string?)null);
 
             Func<Task> act = () => CreateService().RefreshTokenAsync(request, client);
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>();
-            _identityServiceMock.Verify(x => x.RevokeRefreshTokensAsync(user), Times.Once);
-            _identityServiceMock.Verify(x => x.CreateRefreshTokenAsync(It.IsAny<User>(), It.IsAny<AuthClient>()), Times.Never);
+            _tokenServiceMock.Verify(x => x.GenerateAccessToken(It.IsAny<TokenClaimsData>()), Times.Never);
         }
 
         [Theory]
@@ -394,11 +391,10 @@ namespace FamilyVaultApi.UnitTests.Services
             SetUpPrincipal(request.Token, "user-1");
             var user = CreateUserEntity(id: "user-1", email: "user@example.com");
             _identityServiceMock.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(user);
-            _identityServiceMock.Setup(x => x.VerifyRefreshTokenAsync(user, client, request.RefreshToken)).ReturnsAsync(true);
+            _refreshTokenServiceMock.Setup(x => x.RotateAsync("user-1", client, request.RefreshToken)).ReturnsAsync("new-refresh-token");
             _identityServiceMock.Setup(x => x.GetRolesAsync(user)).ReturnsAsync((true, false));
             _identityServiceMock.Setup(x => x.GetUserClaimsAsync(user)).ReturnsAsync(new List<Claim>());
             _identityServiceMock.Setup(x => x.GetRoleClaimsAsync("Administrator")).ReturnsAsync(new List<Claim>());
-            _identityServiceMock.Setup(x => x.CreateRefreshTokenAsync(user, client)).ReturnsAsync("new-refresh-token");
             _tokenServiceMock.Setup(x => x.GenerateAccessToken(It.IsAny<TokenClaimsData>())).Returns("new-access-token");
 
             var result = await CreateService().RefreshTokenAsync(request, client);
@@ -406,50 +402,28 @@ namespace FamilyVaultApi.UnitTests.Services
             result.UserId.Should().Be("user-1");
             result.Token.Should().Be("new-access-token");
             result.RefreshToken.Should().Be("new-refresh-token");
-            _identityServiceMock.Verify(x => x.CreateRefreshTokenAsync(user, client), Times.Once);
-            _identityServiceMock.Verify(x => x.RevokeRefreshTokensAsync(It.IsAny<User>()), Times.Never);
+            _refreshTokenServiceMock.Verify(x => x.RotateAsync("user-1", client, request.RefreshToken), Times.Once);
         }
 
-        // ── LogoutAsync ──────────────────────────────────────────────────────
+        // ── LogoutAsync ───────────────────────────────────
 
         [Fact]
-        public async Task LogoutAsync_WhenAuthenticatedViaHttpContext_ShouldUseClaimsUid()
+        public async Task LogoutAsync_WithRefreshToken_ShouldRevokeOnlyThatSession()
         {
-            var httpContext = new DefaultHttpContext { User = ClaimsPrincipalTestHelper.CreateUser("user-1") };
-            _httpContextAccessorMock.SetupGet(x => x.HttpContext).Returns(httpContext);
+            await CreateService().LogoutAsync("refresh-do-aparelho");
 
-            await CreateService().LogoutAsync();
-
-            _identityServiceMock.Verify(x => x.LogoutAsync("user-1"), Times.Once);
+            _refreshTokenServiceMock.Verify(x => x.RevokeSessionAsync("refresh-do-aparelho"), Times.Once);
+            _refreshTokenServiceMock.Verify(x => x.RevokeAllSessionsAsync(It.IsAny<string>()), Times.Never);
         }
 
-        [Fact]
-        public async Task LogoutAsync_WhenNotAuthenticated_ShouldFallBackToTokenClaim()
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        public async Task LogoutAsync_WithoutRefreshToken_ShouldSucceedWithoutRevoking(string? refreshToken)
         {
-            SetUpPrincipal("token-valido", "user-2");
+            await CreateService().LogoutAsync(refreshToken);
 
-            await CreateService().LogoutAsync("token-valido");
-
-            _identityServiceMock.Verify(x => x.LogoutAsync("user-2"), Times.Once);
-        }
-
-        [Fact]
-        public async Task LogoutAsync_WhenTokenIsInvalid_ShouldThrowUnauthorizedAccessException()
-        {
-            _tokenServiceMock.Setup(x => x.GetPrincipalFromExpiredToken("isto-nao-e-um-jwt")).Returns((ClaimsPrincipal?)null);
-
-            Func<Task> act = () => CreateService().LogoutAsync("isto-nao-e-um-jwt");
-
-            await act.Should().ThrowAsync<UnauthorizedAccessException>();
-            _identityServiceMock.Verify(x => x.LogoutAsync(It.IsAny<string>()), Times.Never);
-        }
-
-        [Fact]
-        public async Task LogoutAsync_WhenNoUidAvailable_ShouldThrowUnauthorizedAccessException()
-        {
-            Func<Task> act = () => CreateService().LogoutAsync(token: null);
-
-            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            _refreshTokenServiceMock.Verify(x => x.RevokeSessionAsync(It.IsAny<string>()), Times.Never);
         }
     }
 }

@@ -63,7 +63,8 @@ namespace FamilyVaultApi.Controllers
         [HttpPost("logout")]
         public async Task<IActionResult> Logout([FromBody] LogoutRequestDto? request = null)
         {
-            await _accountService.LogoutAsync(request?.Token);
+            // O app manda o refresh no corpo; o web, no cookie
+            await _accountService.LogoutAsync(request?.RefreshToken ?? Request.Cookies["refreshToken"]);
             ClearRefreshTokenCookie();
             return Ok(ApiResponse<object>.Ok(null, "Logout realizado com sucesso."));
         }

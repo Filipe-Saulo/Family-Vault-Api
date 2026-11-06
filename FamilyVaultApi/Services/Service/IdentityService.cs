@@ -1,13 +1,10 @@
 using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
-using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace FamilyVaultApi.Services.Service
 {
@@ -17,18 +14,15 @@ namespace FamilyVaultApi.Services.Service
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IPhoneNumberService _phoneNumberService;
 
-        // Provider próprio (validade de 7 dias); o Default fica com a validade padrão para o reset de senha
-        private readonly string _loginProvider = RefreshTokenProvider.ProviderName;
-        private const string _legacyRefreshTokenPurpose = "RefreshToken";
-        private const string _webRefreshTokenPurpose = "RefreshToken-web";
-        private const string _appRefreshTokenPurpose = "RefreshToken-app";
+        private readonly IRefreshTokenService _refreshTokenService;
         private const string _passwordResetCodePurpose = "ResetPasswordCode";
 
-        public IdentityService(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, IPhoneNumberService phoneNumberService)
+        public IdentityService(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, IPhoneNumberService phoneNumberService, IRefreshTokenService refreshTokenService)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _phoneNumberService = phoneNumberService;
+            _refreshTokenService = refreshTokenService;
         }
 
         public async Task<User?> FindUserByLoginAsync(LoginRequestDto loginDto)
@@ -129,51 +123,9 @@ namespace FamilyVaultApi.Services.Service
             return await _roleManager.GetClaimsAsync(role);
         }
 
-        private static string GetRefreshTokenPurpose(AuthClient client)
-        {
-            return client == AuthClient.Web ? _webRefreshTokenPurpose : _appRefreshTokenPurpose;
-        }
-
-        public async Task<string> CreateRefreshTokenAsync(User user, AuthClient client)
-        {
-            var purpose = GetRefreshTokenPurpose(client);
-
-            await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, purpose);
-
-            var newRefreshToken = await _userManager.GenerateUserTokenAsync(user, _loginProvider, purpose);
-
-            await _userManager.SetAuthenticationTokenAsync(user, _loginProvider, purpose, newRefreshToken);
-
-            return newRefreshToken;
-        }
-
-        public async Task<bool> VerifyRefreshTokenAsync(User user, AuthClient client, string refreshToken)
-        {
-            var purpose = GetRefreshTokenPurpose(client);
-
-            var storedToken = await _userManager.GetAuthenticationTokenAsync(user, _loginProvider, purpose);
-            if (storedToken == null || string.IsNullOrEmpty(refreshToken))
-                return false;
-
-            var storedBytes = Encoding.UTF8.GetBytes(storedToken);
-            var receivedBytes = Encoding.UTF8.GetBytes(refreshToken);
-            if (storedBytes.Length != receivedBytes.Length
-                || !CryptographicOperations.FixedTimeEquals(storedBytes, receivedBytes))
-                return false;
-
-            return await _userManager.VerifyUserTokenAsync(user, _loginProvider, purpose, refreshToken);
-        }
-
         public async Task RevokeRefreshTokensAsync(User user)
         {
-            await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _webRefreshTokenPurpose);
-            await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _appRefreshTokenPurpose);
-            await _userManager.RemoveAuthenticationTokenAsync(user, _loginProvider, _legacyRefreshTokenPurpose);
-
-            // Tokens gravados antes do provider próprio ficavam sob o provider padrão
-            await _userManager.RemoveAuthenticationTokenAsync(user, TokenOptions.DefaultProvider, _webRefreshTokenPurpose);
-            await _userManager.RemoveAuthenticationTokenAsync(user, TokenOptions.DefaultProvider, _appRefreshTokenPurpose);
-            await _userManager.RemoveAuthenticationTokenAsync(user, TokenOptions.DefaultProvider, _legacyRefreshTokenPurpose);
+            await _refreshTokenService.RevokeAllSessionsAsync(user.Id);
             await _userManager.UpdateSecurityStampAsync(user);
         }
 
@@ -254,13 +206,5 @@ namespace FamilyVaultApi.Services.Service
             return Enumerable.Empty<IdentityError>();
         }
 
-        public async Task LogoutAsync(string userId)
-        {
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null)
-                throw new NotFoundException("Usuário", userId);
-
-            await RevokeRefreshTokensAsync(user);
-        }
     }
 }

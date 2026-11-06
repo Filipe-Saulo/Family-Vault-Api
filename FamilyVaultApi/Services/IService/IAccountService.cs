@@ -10,6 +10,6 @@ namespace FamilyVaultApi.Services.IService
         Task<IEnumerable<IdentityError>> RegisterAsync(CreateAccountRequestDto dto);
         Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto, AuthClient client);
         Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request, AuthClient client);
-        Task LogoutAsync(string? token = null);
+        Task LogoutAsync(string? refreshToken);
     }
 }
