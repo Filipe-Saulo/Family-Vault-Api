@@ -69,14 +69,14 @@ namespace FamilyVaultApi.Controllers
         }
 
         [HttpPost("web/refreshtoken")]
-        public Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenWeb([FromBody] RefreshTokenRequestDto? request)
+        public Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenWeb([FromBody] RefreshTokenBodyDto? request)
             => RefreshTokenInternal(request, isWeb: true);
 
         [HttpPost("app/refreshtoken")]
-        public Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenApp([FromBody] RefreshTokenRequestDto? request)
+        public Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenApp([FromBody] RefreshTokenBodyDto? request)
             => RefreshTokenInternal(request, isWeb: false);
 
-        private async Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenInternal(RefreshTokenRequestDto? request, bool isWeb)
+        private async Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenInternal(RefreshTokenBodyDto? request, bool isWeb)
         {
             var refreshToken = isWeb
                 ? Request.Cookies["refreshToken"]
