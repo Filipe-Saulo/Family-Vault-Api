@@ -13,13 +13,14 @@ flowchart LR
 
 ## Highlights
 
-- Refresh token **per client** (web cookie / app body), with **reuse detection**: a reused token revokes every session
+- **Per-device sessions**: refresh tokens live in their own table, stored only as SHA-256 hashes and grouped in a family per login, so web, app and several devices coexist and logout ends only the current session
+- **Refresh token rotation** with an atomic swap and **reuse detection**: a token replayed after a 10 s grace window revokes only its own session, while concurrent refreshes and lost responses don't log anyone out
 - Account **lockout** (5 wrong passwords, 15 min) with a generic 401 that never reveals which accounts exist
 - Password recovery by 6-digit **code** sent by phone, with wrong guesses counting toward lockout
 - Categories are **global or personal**; changing or deleting one in use answers **409**
 - Standard error **envelope** (`ApiResponse<T>` with `traceId`), also for 401, 403 and 429
 - **Rate limiting** on auth endpoints
-- **278 unit tests** on the Service layer and **integration tests** (WebApplicationFactory + in-memory SQLite) through the real HTTP pipeline, run by CI on every push, with **73.1% line coverage**
+- **277 unit tests** on the Service layer and **integration tests** (WebApplicationFactory + in-memory SQLite) through the real HTTP pipeline, run by CI on every push, with **73.1% line coverage**
 
 ---
 
@@ -115,7 +116,7 @@ dotnet run --project FamilyVaultApi
 | POST | `/api/register` | Public sign-up of a regular User, by phone only (an e-mail is rejected); 201 on success |
 | POST | `/api/web/login` | Authenticate; refresh token set as an HttpOnly, `SameSite=Lax`, `Path=/api` cookie (the web panel calls the API through its own origin via a proxy) |
 | POST | `/api/app/login` | Authenticate; refresh token returned in the response body |
-| POST | `/api/logout` | Revoke the user's refresh tokens on both clients (web and app) and clear the cookie; body `{token}` (access token, may be expired) when not authenticated |
+| POST | `/api/logout` | Anonymous; ends only the session of the given refresh token (body `{refreshToken}` or the web cookie) and clears the cookie; always 200, even with a missing or unknown token |
 | POST | `/api/web/refreshtoken` | Refresh access token; reads/writes the refresh token via cookie |
 | POST | `/api/app/refreshtoken` | Refresh access token; reads/writes the refresh token via request/response body |
 | POST | `/api/password/forgot` | Anonymous; body `{phone}`; always answers 202 (never reveals whether the account exists) and sends a 6-digit code by phone |

@@ -122,8 +122,7 @@ builder.Services.AddIdentity<User, IdentityRole>(options =>
 })
 .AddErrorDescriber<PortugueseIdentityErrorDescriber>()
 .AddEntityFrameworkStores<DatabaseContext>()
-.AddDefaultTokenProviders()
-.AddTokenProvider<RefreshTokenProvider>(RefreshTokenProvider.ProviderName);
+.AddDefaultTokenProviders();
 
 builder.Services.AddAutoMapper(typeof(AutoMapperProfile));
 //account
@@ -131,6 +130,8 @@ builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IIdentityService, IdentityService>();
+builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddSingleton<IPhoneNumberService, PhoneNumberService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddSingleton<IVerificationCodeSender, LoggingVerificationCodeSender>();

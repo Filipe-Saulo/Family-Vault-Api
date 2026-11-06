@@ -15,6 +15,7 @@ namespace FamilyVaultApi.Data
         public DbSet<Category> Categories { get; set; }
         public DbSet<TransactionType> TransactionTypes { get; set; }
         public DbSet<Transaction> Transactions { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         public DatabaseContext(DbContextOptions options) : base(options)
         {
@@ -42,6 +43,7 @@ namespace FamilyVaultApi.Data
             modelBuilder.ApplyConfiguration(new TransactionTypeConfiguration());
             modelBuilder.ApplyConfiguration(new TransactionConfiguration());
             modelBuilder.ApplyConfiguration(new RoleConfiguration());
+            modelBuilder.ApplyConfiguration(new RefreshTokenConfiguration());
 
             SeedData(modelBuilder);           
 

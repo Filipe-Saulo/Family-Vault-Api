@@ -18,17 +18,17 @@ namespace FamilyVaultApi.Services.Service
     {
         private readonly IAccountRepository _repository;
         private readonly IIdentityService _identityService;
-        private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ITokenService _tokenService;
         private readonly IPhoneNumberService _phoneNumberService;
+        private readonly IRefreshTokenService _refreshTokenService;
 
-        public AccountService(IAccountRepository repository, IIdentityService identityService, IHttpContextAccessor httpContextAccessor, ITokenService tokenService, IPhoneNumberService phoneNumberService)
+        public AccountService(IAccountRepository repository, IIdentityService identityService, ITokenService tokenService, IPhoneNumberService phoneNumberService, IRefreshTokenService refreshTokenService)
         {
             _repository = repository;
             _identityService = identityService;
-            _httpContextAccessor = httpContextAccessor;
             _tokenService = tokenService;
             _phoneNumberService = phoneNumberService;
+            _refreshTokenService = refreshTokenService;
         }
 
         private async Task<string?> ValidatePhoneAsync(CreateAccountRequestDto dto, List<IdentityError> errors)
@@ -106,7 +106,7 @@ namespace FamilyVaultApi.Services.Service
                 throw new SecurityException("Usuário sem role válida.");
 
             var token = await BuildAccessTokenAsync(user, userIsAdmin, userIsUser);
-            var refreshToken = await _identityService.CreateRefreshTokenAsync(user, client);
+            var refreshToken = await _refreshTokenService.CreateSessionAsync(user.Id, client);
 
             return new AuthResponseDto
             {
@@ -155,17 +155,13 @@ namespace FamilyVaultApi.Services.Service
             if (await _identityService.IsLockedOutAsync(user))
                 throw new UnauthorizedAccessException("Refresh token inválido ou expirado.");
 
-            var isValidRefreshToken = await _identityService.VerifyRefreshTokenAsync(user, client, request.RefreshToken);
-            if (!isValidRefreshToken)
-            {
-                await _identityService.RevokeRefreshTokensAsync(user);
+            var newRefreshToken = await _refreshTokenService.RotateAsync(user.Id, client, request.RefreshToken);
+            if (newRefreshToken == null)
                 throw new UnauthorizedAccessException("Refresh token inválido ou expirado.");
-            }
 
             var (isAdmin, isUser) = await _identityService.GetRolesAsync(user);
 
             var newAccessToken = await BuildAccessTokenAsync(user, isAdmin, isUser);
-            var newRefreshToken = await _identityService.CreateRefreshTokenAsync(user, client);
 
             return new AuthResponseDto
             {
@@ -175,27 +171,12 @@ namespace FamilyVaultApi.Services.Service
             };
         }
 
-        public async Task LogoutAsync(string? token = null)
+        // Encerra só a sessão do refresh informado. Sem token ou com token desconhecido não há o que
+        // encerrar e o logout continua sendo sucesso, como na revogação do OAuth (RFC 7009).
+        public async Task LogoutAsync(string? refreshToken)
         {
-            var context = _httpContextAccessor.HttpContext;
-
-            string? userId = null;
-
-            if (context?.User.Identity?.IsAuthenticated == true)
-            {
-                userId = context.User.Claims.FirstOrDefault(c => c.Type == "uid")?.Value;
-            }
-
-            if (string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(token))
-            {
-                var principal = _tokenService.GetPrincipalFromExpiredToken(token);
-                userId = principal?.FindFirst("uid")?.Value;
-            }
-
-            if (string.IsNullOrEmpty(userId))
-                throw new UnauthorizedAccessException("Token inválido ou ausente.");
-
-            await _identityService.LogoutAsync(userId);
+            if (!string.IsNullOrEmpty(refreshToken))
+                await _refreshTokenService.RevokeSessionAsync(refreshToken);
         }
     }
 }

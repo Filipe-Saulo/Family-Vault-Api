@@ -17,7 +17,7 @@ namespace FamilyVaultApi.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.11")
+                .HasAnnotation("ProductVersion", "8.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -195,6 +195,68 @@ namespace FamilyVaultApi.Migrations
                             IsActive = true,
                             Name = "Receita"
                         });
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.RefreshToken", b =>
+                {
+                    b.Property<long>("RefreshTokenId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("refresh_token_id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("RefreshTokenId"));
+
+                    b.Property<int>("Client")
+                        .HasColumnType("int")
+                        .HasColumnName("client");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("consumed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("FamilyId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("family_id");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("RefreshTokenId");
+
+                    b.HasIndex("FamilyId")
+                        .HasDatabaseName("idx_refresh_tokens_family");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("uq_refresh_tokens_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("idx_refresh_tokens_user");
+
+                    b.ToTable("tb_refresh_tokens", (string)null);
                 });
 
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.Transaction", b =>
@@ -654,6 +716,18 @@ namespace FamilyVaultApi.Migrations
                         .HasConstraintName("fk_categories_user");
 
                     b.Navigation("Purpose");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_refresh_tokens_user");
 
                     b.Navigation("User");
                 });

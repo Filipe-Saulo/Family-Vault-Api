@@ -63,20 +63,21 @@ namespace FamilyVaultApi.Controllers
         [HttpPost("logout")]
         public async Task<IActionResult> Logout([FromBody] LogoutRequestDto? request = null)
         {
-            await _accountService.LogoutAsync(request?.Token);
+            // O app manda o refresh no corpo; o web, no cookie
+            await _accountService.LogoutAsync(request?.RefreshToken ?? Request.Cookies["refreshToken"]);
             ClearRefreshTokenCookie();
             return Ok(ApiResponse<object>.Ok(null, "Logout realizado com sucesso."));
         }
 
         [HttpPost("web/refreshtoken")]
-        public Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenWeb([FromBody] RefreshTokenRequestDto? request)
+        public Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenWeb([FromBody] RefreshTokenBodyDto? request)
             => RefreshTokenInternal(request, isWeb: true);
 
         [HttpPost("app/refreshtoken")]
-        public Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenApp([FromBody] RefreshTokenRequestDto? request)
+        public Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenApp([FromBody] RefreshTokenBodyDto? request)
             => RefreshTokenInternal(request, isWeb: false);
 
-        private async Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenInternal(RefreshTokenRequestDto? request, bool isWeb)
+        private async Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenInternal(RefreshTokenBodyDto? request, bool isWeb)
         {
             var refreshToken = isWeb
                 ? Request.Cookies["refreshToken"]
