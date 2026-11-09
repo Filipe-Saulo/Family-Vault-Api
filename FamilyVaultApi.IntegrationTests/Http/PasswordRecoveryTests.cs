@@ -165,7 +165,7 @@ namespace FamilyVaultApi.IntegrationTests.Http
         [Fact]
         public async Task RegisterCode_WhenAccountAlreadyExists_ShouldAnswer202WithoutNewDelivery()
         {
-            using var factory = new CapturingApiFactory(perMinute: 10);
+            using var factory = new CapturingApiFactory(minIntervalSeconds: 0);
             var client = factory.CreateClient();
             const string email = "fulano@exemplo.com";
             await RegisterByEmailAsync(factory, client, email);
@@ -224,7 +224,7 @@ namespace FamilyVaultApi.IntegrationTests.Http
         [Fact]
         public async Task ForgotAndReset_ByEmail_ShouldChangePasswordWithDeliveredCode()
         {
-            using var factory = new CapturingApiFactory(perMinute: 10);
+            using var factory = new CapturingApiFactory(minIntervalSeconds: 0);
             var client = factory.CreateClient();
             const string email = "fulano@exemplo.com";
             await RegisterByEmailAsync(factory, client, email);
@@ -245,7 +245,7 @@ namespace FamilyVaultApi.IntegrationTests.Http
         [Fact]
         public async Task Reset_ByEmailWithWrongCode_ShouldAnswer400AndKeepOldPassword()
         {
-            using var factory = new CapturingApiFactory(perMinute: 10);
+            using var factory = new CapturingApiFactory(minIntervalSeconds: 0);
             var client = factory.CreateClient();
             const string email = "fulano@exemplo.com";
             await RegisterByEmailAsync(factory, client, email);
@@ -397,11 +397,11 @@ namespace FamilyVaultApi.IntegrationTests.Http
         {
             public const string FlushDestination = "flush@exemplo.com";
 
-            private readonly int? _perMinute;
+            private readonly int? _minIntervalSeconds;
 
-            public CapturingApiFactory(int? perMinute = null, string? adminEmail = null) : base(adminEmail, adminEmail == null ? null : Password)
+            public CapturingApiFactory(int? minIntervalSeconds = null, string? adminEmail = null) : base(adminEmail, adminEmail == null ? null : Password)
             {
-                _perMinute = perMinute;
+                _minIntervalSeconds = minIntervalSeconds;
             }
 
             public CapturedDeliveries Deliveries { get; } = new();
@@ -409,8 +409,9 @@ namespace FamilyVaultApi.IntegrationTests.Http
             protected override void ConfigureWebHost(IWebHostBuilder builder)
             {
                 base.ConfigureWebHost(builder);
-                if (_perMinute != null)
-                    builder.UseSetting("VerificationCode:SendLimit:PerMinute", _perMinute.Value.ToString());
+                builder.UseSetting("VerificationCode:SendLimit:PerDay", "5");
+                if (_minIntervalSeconds != null)
+                    builder.UseSetting("VerificationCode:SendLimit:MinIntervalSeconds", _minIntervalSeconds.Value.ToString());
 
                 builder.ConfigureServices(services =>
                 {

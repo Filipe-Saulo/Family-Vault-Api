@@ -46,7 +46,7 @@ namespace FamilyVaultApi.UnitTests.Services
             _repositoryMock.Setup(x => x.EmailUserExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
             _repositoryMock.Setup(x => x.PhoneExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
             _tokenServiceMock.Setup(x => x.GenerateAccessToken(It.IsAny<TokenClaimsData>())).Returns("fake-jwt-token");
-            _sendLimiterMock.Setup(x => x.TryAcquire(It.IsAny<string>())).Returns(true);
+            _sendLimiterMock.Setup(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), It.IsAny<string>())).ReturnsAsync(true);
 
             string defaultFormatted = "+5511987654312";
             _phoneNumberServiceMock
@@ -94,7 +94,7 @@ namespace FamilyVaultApi.UnitTests.Services
         [Fact]
         public async Task SendRegistrationCodeAsync_WhenPhoneIsNew_ShouldIssueCodeAndSendSms()
         {
-            _registrationCodeStoreMock.Setup(x => x.Issue(E164)).Returns("654321");
+            _registrationCodeStoreMock.Setup(x => x.IssueAsync(E164, VerificationPurpose.Registration)).ReturnsAsync("654321");
 
             await CreateService().SendRegistrationCodeAsync(new RegistrationCodeRequestDto { PhoneNumber = "11987654312" });
 
@@ -104,7 +104,7 @@ namespace FamilyVaultApi.UnitTests.Services
         [Fact]
         public async Task SendRegistrationCodeAsync_WhenEmailIsNew_ShouldIssueCodeForNormalizedEmailAndSendEmail()
         {
-            _registrationCodeStoreMock.Setup(x => x.Issue(Email)).Returns("654321");
+            _registrationCodeStoreMock.Setup(x => x.IssueAsync(Email, VerificationPurpose.Registration)).ReturnsAsync("654321");
 
             await CreateService().SendRegistrationCodeAsync(new RegistrationCodeRequestDto { Email = "  Fulano@Exemplo.com " });
 
@@ -119,7 +119,7 @@ namespace FamilyVaultApi.UnitTests.Services
             Func<Task> act = () => CreateService().SendRegistrationCodeAsync(new RegistrationCodeRequestDto { PhoneNumber = "123" });
 
             await act.Should().NotThrowAsync();
-            _registrationCodeStoreMock.Verify(x => x.Issue(It.IsAny<string>()), Times.Never);
+            _registrationCodeStoreMock.Verify(x => x.IssueAsync(It.IsAny<string>(), It.IsAny<VerificationPurpose>()), Times.Never);
             _codeSenderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
         }
 
@@ -140,7 +140,7 @@ namespace FamilyVaultApi.UnitTests.Services
             Func<Task> act = () => CreateService().SendRegistrationCodeAsync(new RegistrationCodeRequestDto { PhoneNumber = "11987654312" });
 
             await act.Should().NotThrowAsync();
-            _sendLimiterMock.Verify(x => x.TryAcquire(It.IsAny<string>()), Times.Never);
+            _sendLimiterMock.Verify(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), It.IsAny<string>()), Times.Never);
             _codeSenderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
         }
 
@@ -167,12 +167,12 @@ namespace FamilyVaultApi.UnitTests.Services
         [Fact]
         public async Task SendRegistrationCodeAsync_WhenLimitIsReached_ShouldNotIssueNorSendAndNotThrow()
         {
-            _sendLimiterMock.Setup(x => x.TryAcquire(E164)).Returns(false);
+            _sendLimiterMock.Setup(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), E164)).ReturnsAsync(false);
 
             Func<Task> act = () => CreateService().SendRegistrationCodeAsync(new RegistrationCodeRequestDto { PhoneNumber = "11987654312" });
 
             await act.Should().NotThrowAsync();
-            _registrationCodeStoreMock.Verify(x => x.Issue(It.IsAny<string>()), Times.Never);
+            _registrationCodeStoreMock.Verify(x => x.IssueAsync(It.IsAny<string>(), It.IsAny<VerificationPurpose>()), Times.Never);
             _codeSenderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
         }
 
@@ -196,7 +196,7 @@ namespace FamilyVaultApi.UnitTests.Services
             var errors = await CreateService().RegisterAsync(dto);
 
             errors.Should().ContainSingle(e => e.Code == "NoCredentials");
-            _registrationCodeStoreMock.Verify(x => x.Verify(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            _registrationCodeStoreMock.Verify(x => x.VerifyAsync(It.IsAny<string>(), It.IsAny<VerificationPurpose>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -224,7 +224,7 @@ namespace FamilyVaultApi.UnitTests.Services
         public async Task RegisterAsync_WhenCodeIsValidAndPhoneAlreadyExists_ShouldReturnError()
         {
             var dto = RegisterAccountRequestBuilder.New().WithPhoneNumber("5511987654312").Build();
-            _registrationCodeStoreMock.Setup(x => x.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(true);
+            _registrationCodeStoreMock.Setup(x => x.VerifyAsync(It.IsAny<string>(), It.IsAny<VerificationPurpose>(), It.IsAny<string>())).ReturnsAsync(true);
             _repositoryMock.Setup(x => x.PhoneExistsAsync(It.IsAny<string>())).ReturnsAsync(true);
 
             var errors = await CreateService().RegisterAsync(dto);
@@ -236,7 +236,7 @@ namespace FamilyVaultApi.UnitTests.Services
         public async Task RegisterAsync_WhenCodeIsValidAndEmailAlreadyExists_ShouldReturnError()
         {
             var dto = RegisterAccountRequestBuilder.New().WithEmail(Email).Build();
-            _registrationCodeStoreMock.Setup(x => x.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(true);
+            _registrationCodeStoreMock.Setup(x => x.VerifyAsync(It.IsAny<string>(), It.IsAny<VerificationPurpose>(), It.IsAny<string>())).ReturnsAsync(true);
             _repositoryMock.Setup(x => x.EmailUserExistsAsync(Email)).ReturnsAsync(true);
 
             var errors = await CreateService().RegisterAsync(dto);
@@ -248,7 +248,7 @@ namespace FamilyVaultApi.UnitTests.Services
         public async Task RegisterAsync_WhenCodeIsInvalidAndEmailAlreadyExists_ShouldNotRevealTheAccount()
         {
             var dto = RegisterAccountRequestBuilder.New().WithEmail(Email).Build();
-            _registrationCodeStoreMock.Setup(x => x.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
+            _registrationCodeStoreMock.Setup(x => x.VerifyAsync(It.IsAny<string>(), It.IsAny<VerificationPurpose>(), It.IsAny<string>())).ReturnsAsync(false);
             _repositoryMock.Setup(x => x.EmailUserExistsAsync(Email)).ReturnsAsync(true);
 
             Func<Task> act = () => CreateService().RegisterAsync(dto);
@@ -269,14 +269,14 @@ namespace FamilyVaultApi.UnitTests.Services
             var errors = await CreateService().RegisterAsync(dto);
 
             errors.Should().Contain(e => e.Code == "PasswordMismatch");
-            _registrationCodeStoreMock.Verify(x => x.Verify(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            _registrationCodeStoreMock.Verify(x => x.VerifyAsync(It.IsAny<string>(), It.IsAny<VerificationPurpose>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
         public async Task RegisterAsync_WhenPhoneCodeIsWrong_ShouldThrowBadRequestAndNotCreateUser()
         {
             var dto = RegisterAccountRequestBuilder.New().WithPhoneNumber("5511987654312").WithCode("000000").Build();
-            _registrationCodeStoreMock.Setup(x => x.Verify(E164, "000000")).Returns(false);
+            _registrationCodeStoreMock.Setup(x => x.VerifyAsync(E164, VerificationPurpose.Registration, "000000")).ReturnsAsync(false);
 
             Func<Task> act = () => CreateService().RegisterAsync(dto);
 
@@ -288,7 +288,7 @@ namespace FamilyVaultApi.UnitTests.Services
         public async Task RegisterAsync_WhenEmailCodeIsWrong_ShouldThrowBadRequestAndNotCreateUser()
         {
             var dto = RegisterAccountRequestBuilder.New().WithEmail(Email).WithCode("000000").Build();
-            _registrationCodeStoreMock.Setup(x => x.Verify(Email, "000000")).Returns(false);
+            _registrationCodeStoreMock.Setup(x => x.VerifyAsync(Email, VerificationPurpose.Registration, "000000")).ReturnsAsync(false);
 
             Func<Task> act = () => CreateService().RegisterAsync(dto);
 
@@ -300,7 +300,7 @@ namespace FamilyVaultApi.UnitTests.Services
         public async Task RegisterAsync_WhenValidPhoneRegistration_ShouldRegisterVerifiedUserWithSmsAndRemoveCode()
         {
             var dto = RegisterAccountRequestBuilder.New().WithPhoneNumber("5511987654312").Build();
-            _registrationCodeStoreMock.Setup(x => x.Verify(E164, dto.Code)).Returns(true);
+            _registrationCodeStoreMock.Setup(x => x.VerifyAsync(E164, VerificationPurpose.Registration, dto.Code)).ReturnsAsync(true);
             _identityServiceMock
                 .Setup(x => x.RegisterVerifiedUser(It.IsAny<CreateAccountRequestDto>(), E164, VerificationChannel.Sms))
                 .ReturnsAsync(Enumerable.Empty<IdentityError>());
@@ -311,14 +311,14 @@ namespace FamilyVaultApi.UnitTests.Services
             _identityServiceMock.Verify(x => x.RegisterVerifiedUser(
                 It.Is<CreateAccountRequestDto>(a => a.FirstName == dto.FirstName && a.LastName == dto.LastName && a.Password == dto.Password && a.Age == dto.Age),
                 E164, VerificationChannel.Sms), Times.Once);
-            _registrationCodeStoreMock.Verify(x => x.Remove(E164), Times.Once);
+            _registrationCodeStoreMock.Verify(x => x.RemoveAsync(E164, VerificationPurpose.Registration), Times.Once);
         }
 
         [Fact]
         public async Task RegisterAsync_WhenValidEmailRegistration_ShouldRegisterVerifiedUserWithNormalizedEmailAndRemoveCode()
         {
             var dto = RegisterAccountRequestBuilder.New().WithEmail(" Fulano@Exemplo.com ").Build();
-            _registrationCodeStoreMock.Setup(x => x.Verify(Email, dto.Code)).Returns(true);
+            _registrationCodeStoreMock.Setup(x => x.VerifyAsync(Email, VerificationPurpose.Registration, dto.Code)).ReturnsAsync(true);
             _identityServiceMock
                 .Setup(x => x.RegisterVerifiedUser(It.IsAny<CreateAccountRequestDto>(), Email, VerificationChannel.Email))
                 .ReturnsAsync(Enumerable.Empty<IdentityError>());
@@ -327,14 +327,14 @@ namespace FamilyVaultApi.UnitTests.Services
 
             errors.Should().BeEmpty();
             _identityServiceMock.Verify(x => x.RegisterVerifiedUser(It.IsAny<CreateAccountRequestDto>(), Email, VerificationChannel.Email), Times.Once);
-            _registrationCodeStoreMock.Verify(x => x.Remove(Email), Times.Once);
+            _registrationCodeStoreMock.Verify(x => x.RemoveAsync(Email, VerificationPurpose.Registration), Times.Once);
         }
 
         [Fact]
         public async Task RegisterAsync_WhenIdentityRejectsPassword_ShouldReturnErrorsAndKeepTheCode()
         {
             var dto = RegisterAccountRequestBuilder.New().WithEmail(Email).Build();
-            _registrationCodeStoreMock.Setup(x => x.Verify(Email, dto.Code)).Returns(true);
+            _registrationCodeStoreMock.Setup(x => x.VerifyAsync(Email, VerificationPurpose.Registration, dto.Code)).ReturnsAsync(true);
             _identityServiceMock
                 .Setup(x => x.RegisterVerifiedUser(It.IsAny<CreateAccountRequestDto>(), Email, VerificationChannel.Email))
                 .ReturnsAsync(new[] { new IdentityError { Code = "PasswordTooShort", Description = "Senha curta." } });
@@ -342,7 +342,7 @@ namespace FamilyVaultApi.UnitTests.Services
             var errors = await CreateService().RegisterAsync(dto);
 
             errors.Should().ContainSingle(e => e.Code == "PasswordTooShort");
-            _registrationCodeStoreMock.Verify(x => x.Remove(It.IsAny<string>()), Times.Never);
+            _registrationCodeStoreMock.Verify(x => x.RemoveAsync(It.IsAny<string>(), It.IsAny<VerificationPurpose>()), Times.Never);
         }
 
         // ── LoginAsync ───────────────────────────────────────────────────────

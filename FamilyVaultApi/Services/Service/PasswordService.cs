@@ -4,6 +4,7 @@ using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
 using FamilyVaultApi.Models.Dto.Requests.User;
 using FamilyVaultApi.Models.Internal.Enums;
+using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
@@ -34,7 +35,7 @@ namespace FamilyVaultApi.Services.Service
             if (user == null || await _identityService.IsLockedOutAsync(user))
                 return;
 
-            if (!_sendLimiter.TryAcquire(destination!))
+            if (!await _sendLimiter.TryAcquireAsync(channel, destination!))
                 return;
 
             var code = await _identityService.GeneratePasswordResetCodeAsync(user, channel);

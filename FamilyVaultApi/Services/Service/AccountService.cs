@@ -75,10 +75,10 @@ namespace FamilyVaultApi.Services.Service
             if (await DestinationExistsAsync(channel, destination))
                 return;
 
-            if (!_sendLimiter.TryAcquire(destination))
+            if (!await _sendLimiter.TryAcquireAsync(channel, destination))
                 return;
 
-            var code = _registrationCodeStore.Issue(destination);
+            var code = await _registrationCodeStore.IssueAsync(destination, VerificationPurpose.Registration);
             await _codeSender.SendAsync(new VerificationCodeMessage(channel, destination, code, VerificationPurpose.Registration));
         }
 
@@ -103,7 +103,7 @@ namespace FamilyVaultApi.Services.Service
             if (errors.Any())
                 return errors;
 
-            if (!_registrationCodeStore.Verify(destination!, dto.Code))
+            if (!await _registrationCodeStore.VerifyAsync(destination!, VerificationPurpose.Registration, dto.Code))
                 throw new BadRequestException("Código inválido ou expirado.");
 
             // Só depois do código válido: antes disso a mensagem de duplicidade revelaria quais contas existem
@@ -128,7 +128,7 @@ namespace FamilyVaultApi.Services.Service
 
             // O código só é gasto quando a conta é criada; senha recusada deixa tentar de novo
             if (!result.Any())
-                _registrationCodeStore.Remove(destination!);
+                await _registrationCodeStore.RemoveAsync(destination!, VerificationPurpose.Registration);
 
             return result;
         }

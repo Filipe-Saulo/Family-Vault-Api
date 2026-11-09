@@ -522,6 +522,70 @@ namespace FamilyVaultApi.Migrations
                     b.ToTable("tb_user", (string)null);
                 });
 
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.VerificationCode", b =>
+                {
+                    b.Property<string>("Destination")
+                        .HasMaxLength(254)
+                        .HasColumnType("varchar(254)")
+                        .HasColumnName("destination");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("int")
+                        .HasColumnName("purpose");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("expires_at");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("int")
+                        .HasColumnName("failed_attempts");
+
+                    b.HasKey("Destination", "Purpose");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("idx_verification_codes_expires");
+
+                    b.ToTable("tb_verification_codes", (string)null);
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.VerificationSendLimit", b =>
+                {
+                    b.Property<string>("Destination")
+                        .HasMaxLength(254)
+                        .HasColumnType("varchar(254)")
+                        .HasColumnName("destination");
+
+                    b.Property<int>("DayCount")
+                        .HasColumnType("int")
+                        .HasColumnName("day_count");
+
+                    b.Property<DateTime>("DayWindowStartedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("day_window_started_at");
+
+                    b.Property<DateTime>("LastSentAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("last_sent_at");
+
+                    b.HasKey("Destination");
+
+                    b.HasIndex("DayWindowStartedAt")
+                        .HasDatabaseName("idx_verification_send_limits_window");
+
+                    b.ToTable("tb_verification_send_limits", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")

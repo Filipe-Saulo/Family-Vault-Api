@@ -146,8 +146,10 @@ builder.Services.AddSingleton<IPhoneNumberService, PhoneNumberService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.Configure<VerificationSendLimitOptions>(builder.Configuration.GetSection("VerificationCode:SendLimit"));
-builder.Services.AddSingleton<IVerificationSendLimiter, MemoryVerificationSendLimiter>();
-builder.Services.AddSingleton<IRegistrationCodeStore, MemoryRegistrationCodeStore>();
+builder.Services.AddScoped<IVerificationSendLimiter, DbVerificationSendLimiter>();
+builder.Services.AddScoped<IRegistrationCodeStore, DbRegistrationCodeStore>();
+builder.Services.AddScoped<VerificationDataCleaner>();
+builder.Services.AddHostedService<VerificationDataCleanupService>();
 if (useRealDelivery)
 {
     builder.Services.Configure<TwilioSmsOptions>(builder.Configuration.GetSection("Sms:Twilio"));
