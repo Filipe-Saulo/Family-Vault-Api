@@ -21,7 +21,8 @@ namespace FamilyVaultApi.Services.Service
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"]));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
-            var identifierClaim = data.IsAdmin
+            // User cadastrado por e-mail tem o e-mail como identificador
+            var identifierClaim = data.IsAdmin || data.Identifier.Contains('@')
                 ? new Claim(JwtRegisteredClaimNames.Email, data.Identifier)
                 : new Claim("phone_number", data.Identifier);
 

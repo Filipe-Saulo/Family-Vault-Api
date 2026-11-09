@@ -1,6 +1,7 @@
 using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
+using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Services.IService;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +29,8 @@ namespace FamilyVaultApi.Services.Service
         public async Task<User?> FindUserByLoginAsync(LoginRequestDto loginDto)
         {
             if (!string.IsNullOrEmpty(loginDto.Email))
-                return await _userManager.Users.FirstOrDefaultAsync(u => u.UserName == loginDto.Email);
+                // FindByNameAsync compara pelo campo normalizado: maiúsculas digitadas ou salvas não impedem o login
+                return await _userManager.FindByNameAsync(loginDto.Email.Trim());
 
             if (!string.IsNullOrEmpty(loginDto.Phone))
             {
@@ -47,14 +49,19 @@ namespace FamilyVaultApi.Services.Service
             return await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneE164);
         }
 
-        public async Task<string> GeneratePasswordResetCodeAsync(User user)
+        public async Task<string> GeneratePasswordResetCodeAsync(User user, VerificationChannel channel)
         {
-            return await _userManager.GenerateUserTokenAsync(user, TokenOptions.DefaultPhoneProvider, _passwordResetCodePurpose);
+            return await _userManager.GenerateUserTokenAsync(user, TokenProviderFor(channel), _passwordResetCodePurpose);
         }
 
-        public async Task<bool> VerifyPasswordResetCodeAsync(User user, string code)
+        public async Task<bool> VerifyPasswordResetCodeAsync(User user, string code, VerificationChannel channel)
         {
-            return await _userManager.VerifyUserTokenAsync(user, TokenOptions.DefaultPhoneProvider, _passwordResetCodePurpose, code);
+            return await _userManager.VerifyUserTokenAsync(user, TokenProviderFor(channel), _passwordResetCodePurpose, code);
+        }
+
+        private static string TokenProviderFor(VerificationChannel channel)
+        {
+            return channel == VerificationChannel.Email ? TokenOptions.DefaultEmailProvider : TokenOptions.DefaultPhoneProvider;
         }
 
         public async Task<IEnumerable<IdentityError>> ResetPasswordAsync(User user, string newPassword)
@@ -183,6 +190,42 @@ namespace FamilyVaultApi.Services.Service
                 LastName = createAccountDto.LastName,
                 FullName = $"{createAccountDto.FirstName} {createAccountDto.LastName}",
                 PhoneNumber = phone,
+                RegisteredAt = DateTime.UtcNow,
+                LastLogin = DateTime.UtcNow,
+                Age = createAccountDto.Age
+            };
+
+            var resultAccount = await _userManager.CreateAsync(user, createAccountDto.Password);
+
+            if (!resultAccount.Succeeded)
+                return resultAccount.Errors;
+
+            try
+            {
+                await _userManager.AddToRoleAsync(user, "User");
+            }
+            catch (Exception)
+            {
+                await _userManager.DeleteAsync(user);
+
+                throw;
+            }
+            return Enumerable.Empty<IdentityError>();
+        }
+
+        public async Task<IEnumerable<IdentityError>> RegisterVerifiedUser(CreateAccountRequestDto createAccountDto, string destination, VerificationChannel channel)
+        {
+            var isEmail = channel == VerificationChannel.Email;
+            var user = new User
+            {
+                UserName = destination,
+                Email = isEmail ? destination : null,
+                EmailConfirmed = isEmail,
+                PhoneNumber = isEmail ? null : destination,
+                PhoneNumberConfirmed = !isEmail,
+                FirstName = createAccountDto.FirstName,
+                LastName = createAccountDto.LastName,
+                FullName = $"{createAccountDto.FirstName} {createAccountDto.LastName}",
                 RegisteredAt = DateTime.UtcNow,
                 LastLogin = DateTime.UtcNow,
                 Age = createAccountDto.Age

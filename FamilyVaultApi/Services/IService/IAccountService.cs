@@ -7,7 +7,8 @@ namespace FamilyVaultApi.Services.IService
 {
     public interface IAccountService
     {
-        Task<IEnumerable<IdentityError>> RegisterAsync(CreateAccountRequestDto dto);
+        Task SendRegistrationCodeAsync(RegistrationCodeRequestDto dto);
+        Task<IEnumerable<IdentityError>> RegisterAsync(RegisterAccountRequestDto dto);
         Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto, AuthClient client);
         Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request, AuthClient client);
         Task LogoutAsync(string? refreshToken);

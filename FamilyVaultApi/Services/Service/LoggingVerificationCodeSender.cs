@@ -1,8 +1,9 @@
+using FamilyVaultApi.Common;
 using FamilyVaultApi.Services.IService;
 
 namespace FamilyVaultApi.Services.Service
 {
-    // Sem provedor de SMS: o código só aparece no log em Development
+    // Usado em Development e Testing, no lugar da Twilio e do Resend (uma instância por canal): o código só aparece no log em Development
     public class LoggingVerificationCodeSender : IVerificationCodeSender
     {
         private readonly ILogger<LoggingVerificationCodeSender> _logger;
@@ -14,24 +15,16 @@ namespace FamilyVaultApi.Services.Service
             _environment = environment;
         }
 
-        public Task SendAsync(string phoneE164, string code)
+        public Task SendAsync(VerificationCodeMessage message)
         {
-            var masked = Mask(phoneE164);
+            var masked = DestinationMask.Mask(message.Destination);
 
             if (_environment.IsDevelopment())
-                _logger.LogInformation("Código de recuperação para {Phone}: {Code}", masked, code);
+                _logger.LogInformation("Código de verificação ({Purpose}, {Channel}) para {Destination}: {Code}", message.Purpose, message.Channel, masked, message.Code);
             else
-                _logger.LogInformation("Código de recuperação gerado para {Phone}.", masked);
+                _logger.LogInformation("Código de verificação ({Purpose}, {Channel}) gerado para {Destination}.", message.Purpose, message.Channel, masked);
 
             return Task.CompletedTask;
-        }
-
-        private static string Mask(string phone)
-        {
-            if (string.IsNullOrEmpty(phone) || phone.Length <= 4)
-                return "****";
-
-            return new string('*', phone.Length - 4) + phone[^4..];
         }
     }
 }

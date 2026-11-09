@@ -4,9 +4,11 @@ namespace FamilyVaultApi.Models.Dto.Requests.Account
 {
     public class ResetPasswordWithCodeRequestDto
     {
-        [Required(ErrorMessage = "Telefone é obrigatório.")]
+        // Exatamente um entre Phone e Email (conferido no service)
         [StringLength(30, ErrorMessage = "Telefone inválido.")]
-        public string Phone { get; set; }
+        public string? Phone { get; set; }
+        [StringLength(254, ErrorMessage = "E-mail inválido.")]
+        public string? Email { get; set; }
         [Required(ErrorMessage = "Código é obrigatório.")]
         [StringLength(10, ErrorMessage = "Código inválido.")]
         public string Code { get; set; }
