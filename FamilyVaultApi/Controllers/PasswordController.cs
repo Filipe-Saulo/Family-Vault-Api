@@ -22,7 +22,7 @@ namespace FamilyVaultApi.Controllers
         {
             await _passwordService.ForgotPasswordAsync(dto);
             return StatusCode(StatusCodes.Status202Accepted,
-                ApiResponse<object>.Accepted("Se o telefone estiver cadastrado, enviaremos um código."));
+                ApiResponse<object>.Accepted("Se o telefone ou e-mail estiver cadastrado, enviaremos um código."));
         }
 
         [HttpPost("reset")]

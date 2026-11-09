@@ -14,5 +14,11 @@ namespace FamilyVaultApi.Common.Validators
 
             return regex.IsMatch(email);
         }
+
+        // Forma guardada no UserName: sem espaços nas pontas e em minúsculas
+        public static string Normalizar(string email)
+        {
+            return email.Trim().ToLowerInvariant();
+        }
     }
 }

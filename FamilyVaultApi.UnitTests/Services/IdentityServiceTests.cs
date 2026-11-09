@@ -71,9 +71,75 @@ namespace FamilyVaultApi.UnitTests.Services
         {
             _userManagerMock.Setup(x => x.GenerateUserTokenAsync(_user, TokenOptions.DefaultPhoneProvider, "ResetPasswordCode")).ReturnsAsync("123456");
 
-            var result = await CreateService().GeneratePasswordResetCodeAsync(_user);
+            var result = await CreateService().GeneratePasswordResetCodeAsync(_user, VerificationChannel.Sms);
 
             result.Should().Be("123456");
+        }
+
+        [Fact]
+        public async Task GeneratePasswordResetCodeAsync_WhenChannelIsEmail_ShouldUseDefaultEmailProvider()
+        {
+            _userManagerMock.Setup(x => x.GenerateUserTokenAsync(_user, TokenOptions.DefaultEmailProvider, "ResetPasswordCode")).ReturnsAsync("654321");
+
+            var result = await CreateService().GeneratePasswordResetCodeAsync(_user, VerificationChannel.Email);
+
+            result.Should().Be("654321");
+        }
+
+        [Fact]
+        public async Task VerifyPasswordResetCodeAsync_WhenChannelIsEmail_ShouldUseDefaultEmailProvider()
+        {
+            _userManagerMock.Setup(x => x.VerifyUserTokenAsync(_user, TokenOptions.DefaultEmailProvider, "ResetPasswordCode", "654321")).ReturnsAsync(true);
+
+            var result = await CreateService().VerifyPasswordResetCodeAsync(_user, "654321", VerificationChannel.Email);
+
+            result.Should().BeTrue();
+        }
+
+        [Theory]
+        [InlineData(VerificationChannel.Sms, "+5511987654312")]
+        [InlineData(VerificationChannel.Email, "fulano@exemplo.com")]
+        public async Task RegisterVerifiedUser_ShouldUseDestinationAsUserNameAndConfirmOnlyThatChannel(VerificationChannel channel, string destination)
+        {
+            User? created = null;
+            _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<User>(), "Senha@123"))
+                .Callback<User, string>((u, _) => created = u)
+                .ReturnsAsync(IdentityResult.Success);
+            _userManagerMock.Setup(x => x.AddToRoleAsync(It.IsAny<User>(), "User")).ReturnsAsync(IdentityResult.Success);
+            var dto = new CreateAccountRequestDto { FirstName = "Fulano", LastName = "Silva", Password = "Senha@123", PasswordConfirm = "Senha@123", Age = 30 };
+
+            var errors = await CreateService().RegisterVerifiedUser(dto, destination, channel);
+
+            errors.Should().BeEmpty();
+            created!.UserName.Should().Be(destination);
+            if (channel == VerificationChannel.Email)
+            {
+                created.Email.Should().Be(destination);
+                created.EmailConfirmed.Should().BeTrue();
+                created.PhoneNumber.Should().BeNull();
+                created.PhoneNumberConfirmed.Should().BeFalse();
+            }
+            else
+            {
+                created.PhoneNumber.Should().Be(destination);
+                created.PhoneNumberConfirmed.Should().BeTrue();
+                created.Email.Should().BeNull();
+                created.EmailConfirmed.Should().BeFalse();
+            }
+            _userManagerMock.Verify(x => x.AddToRoleAsync(created, "User"), Times.Once);
+        }
+
+        [Fact]
+        public async Task RegisterVerifiedUser_WhenIdentityRejects_ShouldReturnErrorsWithoutAddingRole()
+        {
+            _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<User>(), It.IsAny<string>()))
+                .ReturnsAsync(IdentityResult.Failed(new IdentityError { Code = "PasswordTooShort", Description = "curta" }));
+            var dto = new CreateAccountRequestDto { FirstName = "Fulano", LastName = "Silva", Password = "x", PasswordConfirm = "x", Age = 30 };
+
+            var errors = await CreateService().RegisterVerifiedUser(dto, "fulano@exemplo.com", VerificationChannel.Email);
+
+            errors.Should().ContainSingle(e => e.Code == "PasswordTooShort");
+            _userManagerMock.Verify(x => x.AddToRoleAsync(It.IsAny<User>(), It.IsAny<string>()), Times.Never);
         }
 
         [Theory]
@@ -83,7 +149,7 @@ namespace FamilyVaultApi.UnitTests.Services
         {
             _userManagerMock.Setup(x => x.VerifyUserTokenAsync(_user, TokenOptions.DefaultPhoneProvider, "ResetPasswordCode", "123456")).ReturnsAsync(valid);
 
-            var result = await CreateService().VerifyPasswordResetCodeAsync(_user, "123456");
+            var result = await CreateService().VerifyPasswordResetCodeAsync(_user, "123456", VerificationChannel.Sms);
 
             result.Should().Be(valid);
         }

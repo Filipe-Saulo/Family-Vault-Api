@@ -22,46 +22,80 @@ namespace FamilyVaultApi.Services.Service
         private readonly IPhoneNumberService _phoneNumberService;
         private readonly IRefreshTokenService _refreshTokenService;
 
-        public AccountService(IAccountRepository repository, IIdentityService identityService, ITokenService tokenService, IPhoneNumberService phoneNumberService, IRefreshTokenService refreshTokenService)
+        private readonly IRegistrationCodeStore _registrationCodeStore;
+        private readonly IVerificationSendLimiter _sendLimiter;
+        private readonly IVerificationCodeSender _codeSender;
+
+        public AccountService(IAccountRepository repository, IIdentityService identityService, ITokenService tokenService, IPhoneNumberService phoneNumberService, IRefreshTokenService refreshTokenService,
+            IRegistrationCodeStore registrationCodeStore, IVerificationSendLimiter sendLimiter, IVerificationCodeSender codeSender)
         {
             _repository = repository;
             _identityService = identityService;
             _tokenService = tokenService;
             _phoneNumberService = phoneNumberService;
             _refreshTokenService = refreshTokenService;
+            _registrationCodeStore = registrationCodeStore;
+            _sendLimiter = sendLimiter;
+            _codeSender = codeSender;
         }
 
-        private async Task<string?> ValidatePhoneAsync(CreateAccountRequestDto dto, List<IdentityError> errors)
+        // Telefone em E.164 ou e-mail em trim + minúsculas; null se o formato for inválido
+        private string? FormatDestination(VerificationChannel channel, string? value)
         {
-            if (string.IsNullOrEmpty(dto.PhoneNumber)) return null;
-
-            if (!_phoneNumberService.TryValidateAndFormat(dto.PhoneNumber, "BR", out var formatted))
+            if (channel == VerificationChannel.Email)
             {
-                errors.Add(new IdentityError { Code = "InvalidPhone", Description = "Telefone inválido." });
-                return null;
+                var email = value?.Trim() ?? string.Empty;
+                return EmailValidator.Validar(email) ? EmailValidator.Normalizar(email) : null;
             }
 
-            if (await _repository.PhoneExistsAsync(formatted!))
-            {
-                errors.Add(new IdentityError { Code = "DuplicatePhoneNumber", Description = "Número já cadastrado." });
-                return null;
-            }
-
-            return formatted;
+            return _phoneNumberService.TryValidateAndFormat(value ?? string.Empty, "BR", out var phone) ? phone : null;
         }
 
-        public async Task<IEnumerable<IdentityError>> RegisterAsync(CreateAccountRequestDto dto)
+        private async Task<bool> DestinationExistsAsync(VerificationChannel channel, string destination)
         {
-            // O cadastro público cria só User (telefone); Administrator é criado via POST /api/user
-            if (!string.IsNullOrEmpty(dto.Email))
-                throw new BadRequestException("O cadastro público é feito só com telefone.");
+            if (channel == VerificationChannel.Email)
+                return await _repository.EmailUserExistsAsync(destination) || await _identityService.FindByNameAsync(destination) != null;
 
+            return await _repository.PhoneExistsAsync(destination);
+        }
+
+        public async Task SendRegistrationCodeAsync(RegistrationCodeRequestDto dto)
+        {
+            var hasPhone = !string.IsNullOrWhiteSpace(dto.PhoneNumber);
+            var hasEmail = !string.IsNullOrWhiteSpace(dto.Email);
+            if (hasPhone == hasEmail)
+                throw new BadRequestException("Informe o telefone ou o e-mail, só um dos dois.");
+
+            // Responde igual para formato inválido, conta existente ou limite estourado, para não revelar quais contas existem
+            var channel = hasEmail ? VerificationChannel.Email : VerificationChannel.Sms;
+            var destination = FormatDestination(channel, hasEmail ? dto.Email : dto.PhoneNumber);
+            if (destination == null)
+                return;
+
+            if (await DestinationExistsAsync(channel, destination))
+                return;
+
+            if (!await _sendLimiter.TryAcquireAsync(channel, destination))
+                return;
+
+            var code = await _registrationCodeStore.IssueAsync(destination, VerificationPurpose.Registration);
+            await _codeSender.SendAsync(new VerificationCodeMessage(channel, destination, code, VerificationPurpose.Registration));
+        }
+
+        public async Task<IEnumerable<IdentityError>> RegisterAsync(RegisterAccountRequestDto dto)
+        {
+            // O cadastro público cria só User, por telefone ou e-mail confirmado por código; Administrator é criado via POST /api/user
             var errors = new List<IdentityError>();
 
-            if (string.IsNullOrEmpty(dto.PhoneNumber))
-                errors.Add(new IdentityError { Code = "NoCredentials", Description = "Número de telefone é obrigatório." });
+            var hasPhone = !string.IsNullOrWhiteSpace(dto.PhoneNumber);
+            var hasEmail = !string.IsNullOrWhiteSpace(dto.Email);
+            var channel = hasEmail ? VerificationChannel.Email : VerificationChannel.Sms;
+            string? destination = null;
 
-            var phoneFormated = await ValidatePhoneAsync(dto, errors);
+            if (hasPhone == hasEmail)
+                errors.Add(new IdentityError { Code = "NoCredentials", Description = hasPhone ? "Informe só o telefone ou só o e-mail." : "Informe o telefone ou o e-mail." });
+            else
+                destination = ValidateDestinationFormat(channel, hasEmail ? dto.Email : dto.PhoneNumber, errors);
 
             if (dto.Password != dto.PasswordConfirm)
                 errors.Add(new IdentityError { Code = "PasswordMismatch", Description = "As senhas não conferem." });
@@ -69,7 +103,45 @@ namespace FamilyVaultApi.Services.Service
             if (errors.Any())
                 return errors;
 
-            return await _identityService.RegisterUser(dto, phoneFormated);
+            if (!await _registrationCodeStore.VerifyAsync(destination!, VerificationPurpose.Registration, dto.Code))
+                throw new BadRequestException("Código inválido ou expirado.");
+
+            // Só depois do código válido: antes disso a mensagem de duplicidade revelaria quais contas existem
+            if (await DestinationExistsAsync(channel, destination!))
+                return new[]
+                {
+                    channel == VerificationChannel.Email
+                        ? new IdentityError { Code = "DuplicateEmail", Description = "E-mail já cadastrado." }
+                        : new IdentityError { Code = "DuplicatePhoneNumber", Description = "Número já cadastrado." }
+                };
+
+            var account = new CreateAccountRequestDto
+            {
+                Password = dto.Password,
+                FirstName = dto.FirstName,
+                LastName = dto.LastName,
+                PasswordConfirm = dto.PasswordConfirm,
+                Age = dto.Age
+            };
+
+            var result = (await _identityService.RegisterVerifiedUser(account, destination!, channel)).ToList();
+
+            // O código só é gasto quando a conta é criada; senha recusada deixa tentar de novo
+            if (!result.Any())
+                await _registrationCodeStore.RemoveAsync(destination!, VerificationPurpose.Registration);
+
+            return result;
+        }
+
+        private string? ValidateDestinationFormat(VerificationChannel channel, string? value, List<IdentityError> errors)
+        {
+            var destination = FormatDestination(channel, value);
+            if (destination == null)
+                errors.Add(channel == VerificationChannel.Email
+                    ? new IdentityError { Code = "InvalidEmail", Description = "E-mail inválido." }
+                    : new IdentityError { Code = "InvalidPhone", Description = "Telefone inválido." });
+
+            return destination;
         }
 
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto, AuthClient client)
@@ -124,7 +196,8 @@ namespace FamilyVaultApi.Services.Service
             if (isAdmin) permissionClaims.AddRange(await _identityService.GetRoleClaimsAsync("Administrator"));
             if (isUser) permissionClaims.AddRange(await _identityService.GetRoleClaimsAsync("User"));
 
-            var identifier = isAdmin ? user.Email : user.PhoneNumber;
+            // User cadastrado por e-mail não tem telefone
+            var identifier = isAdmin ? user.Email : user.PhoneNumber ?? user.Email;
 
             return _tokenService.GenerateAccessToken(new TokenClaimsData
             {

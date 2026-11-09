@@ -1,7 +1,9 @@
+using FamilyVaultApi.Services.Service;
+
 namespace FamilyVaultApi.Services.IService
 {
     public interface IVerificationCodeSender
     {
-        Task SendAsync(string phoneE164, string code);
+        Task SendAsync(VerificationCodeMessage message);
     }
 }

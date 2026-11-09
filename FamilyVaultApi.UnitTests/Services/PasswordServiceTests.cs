@@ -2,6 +2,8 @@ using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
 using FamilyVaultApi.Models.Dto.Requests.User;
+using FamilyVaultApi.Models.Internal.Enums;
+using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.IService;
 using FamilyVaultApi.Services.Service;
 using FamilyVaultApi.UnitTests.Helpers;
@@ -19,14 +21,16 @@ namespace FamilyVaultApi.UnitTests.Services
         private readonly Mock<IIdentityService> _identityMock = new();
         private readonly Mock<IPhoneNumberService> _phoneMock = new();
         private readonly Mock<IVerificationCodeSender> _senderMock = new();
+        private readonly Mock<IVerificationSendLimiter> _limiterMock = new();
         private readonly User _user = new() { Id = "user-1", PhoneNumber = Phone };
 
         public PasswordServiceTests()
         {
             SetUpPhone(valid: true);
+            _limiterMock.Setup(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), Phone)).ReturnsAsync(true);
         }
 
-        private PasswordService CreateService() => new(_identityMock.Object, _phoneMock.Object, _senderMock.Object);
+        private PasswordService CreateService() => new(_identityMock.Object, _phoneMock.Object, _senderMock.Object, _limiterMock.Object);
 
         private void SetUpPhone(bool valid)
         {
@@ -55,11 +59,11 @@ namespace FamilyVaultApi.UnitTests.Services
         {
             SetUpUser(_user);
             _identityMock.Setup(x => x.IsLockedOutAsync(_user)).ReturnsAsync(false);
-            _identityMock.Setup(x => x.GeneratePasswordResetCodeAsync(_user)).ReturnsAsync("654321");
+            _identityMock.Setup(x => x.GeneratePasswordResetCodeAsync(_user, VerificationChannel.Sms)).ReturnsAsync("654321");
 
             await CreateService().ForgotPasswordAsync(Forgot());
 
-            _senderMock.Verify(x => x.SendAsync(Phone, "654321"), Times.Once);
+            _senderMock.Verify(x => x.SendAsync(new VerificationCodeMessage(VerificationChannel.Sms, Phone, "654321", VerificationPurpose.PasswordReset)), Times.Once);
         }
 
         [Fact]
@@ -70,8 +74,8 @@ namespace FamilyVaultApi.UnitTests.Services
             Func<Task> act = () => CreateService().ForgotPasswordAsync(Forgot());
 
             await act.Should().NotThrowAsync();
-            _identityMock.Verify(x => x.GeneratePasswordResetCodeAsync(It.IsAny<User>()), Times.Never);
-            _senderMock.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            _identityMock.Verify(x => x.GeneratePasswordResetCodeAsync(It.IsAny<User>(), It.IsAny<VerificationChannel>()), Times.Never);
+            _senderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
         }
 
         [Fact]
@@ -83,7 +87,7 @@ namespace FamilyVaultApi.UnitTests.Services
 
             await act.Should().NotThrowAsync();
             _identityMock.Verify(x => x.FindByPhoneAsync(It.IsAny<string>()), Times.Never);
-            _senderMock.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            _senderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
         }
 
         [Fact]
@@ -95,8 +99,31 @@ namespace FamilyVaultApi.UnitTests.Services
             Func<Task> act = () => CreateService().ForgotPasswordAsync(Forgot());
 
             await act.Should().NotThrowAsync();
-            _identityMock.Verify(x => x.GeneratePasswordResetCodeAsync(It.IsAny<User>()), Times.Never);
-            _senderMock.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            _identityMock.Verify(x => x.GeneratePasswordResetCodeAsync(It.IsAny<User>(), It.IsAny<VerificationChannel>()), Times.Never);
+            _senderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ForgotPasswordAsync_WhenPhoneLimitIsReached_ShouldNotGenerateNorSendAndNotThrow()
+        {
+            SetUpUser(_user);
+            _limiterMock.Setup(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), Phone)).ReturnsAsync(false);
+
+            Func<Task> act = () => CreateService().ForgotPasswordAsync(Forgot());
+
+            await act.Should().NotThrowAsync();
+            _identityMock.Verify(x => x.GeneratePasswordResetCodeAsync(It.IsAny<User>(), It.IsAny<VerificationChannel>()), Times.Never);
+            _senderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ForgotPasswordAsync_WhenAccountDoesNotExist_ShouldNotConsumeThePhoneLimit()
+        {
+            SetUpUser(null);
+
+            await CreateService().ForgotPasswordAsync(Forgot());
+
+            _limiterMock.Verify(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), It.IsAny<string>()), Times.Never);
         }
 
         // ── ResetPasswordAsync ───────────────────────────────────────────────
@@ -141,7 +168,7 @@ namespace FamilyVaultApi.UnitTests.Services
             Func<Task> act = () => CreateService().ResetPasswordAsync(Reset());
 
             (await act.Should().ThrowAsync<BadRequestException>()).WithMessage(InvalidCodeMessage);
-            _identityMock.Verify(x => x.VerifyPasswordResetCodeAsync(It.IsAny<User>(), It.IsAny<string>()), Times.Never);
+            _identityMock.Verify(x => x.VerifyPasswordResetCodeAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<VerificationChannel>()), Times.Never);
             _identityMock.Verify(x => x.ResetPasswordAsync(It.IsAny<User>(), It.IsAny<string>()), Times.Never);
         }
 
@@ -150,7 +177,7 @@ namespace FamilyVaultApi.UnitTests.Services
         {
             SetUpUser(_user);
             _identityMock.Setup(x => x.IsLockedOutAsync(_user)).ReturnsAsync(false);
-            _identityMock.Setup(x => x.VerifyPasswordResetCodeAsync(_user, "123456")).ReturnsAsync(false);
+            _identityMock.Setup(x => x.VerifyPasswordResetCodeAsync(_user, "123456", VerificationChannel.Sms)).ReturnsAsync(false);
 
             Func<Task> act = () => CreateService().ResetPasswordAsync(Reset());
 
@@ -165,7 +192,7 @@ namespace FamilyVaultApi.UnitTests.Services
         {
             SetUpUser(_user);
             _identityMock.Setup(x => x.IsLockedOutAsync(_user)).ReturnsAsync(false);
-            _identityMock.Setup(x => x.VerifyPasswordResetCodeAsync(_user, "123456")).ReturnsAsync(true);
+            _identityMock.Setup(x => x.VerifyPasswordResetCodeAsync(_user, "123456", VerificationChannel.Sms)).ReturnsAsync(true);
             _identityMock.Setup(x => x.ResetPasswordAsync(_user, "Senha@123")).ReturnsAsync(Fail());
 
             Func<Task> act = () => CreateService().ResetPasswordAsync(Reset());
@@ -180,7 +207,7 @@ namespace FamilyVaultApi.UnitTests.Services
         {
             SetUpUser(_user);
             _identityMock.Setup(x => x.IsLockedOutAsync(_user)).ReturnsAsync(false);
-            _identityMock.Setup(x => x.VerifyPasswordResetCodeAsync(_user, "123456")).ReturnsAsync(true);
+            _identityMock.Setup(x => x.VerifyPasswordResetCodeAsync(_user, "123456", VerificationChannel.Sms)).ReturnsAsync(true);
             _identityMock.Setup(x => x.ResetPasswordAsync(_user, "Senha@123")).ReturnsAsync(Ok());
 
             await CreateService().ResetPasswordAsync(Reset());
@@ -189,6 +216,134 @@ namespace FamilyVaultApi.UnitTests.Services
             _identityMock.Verify(x => x.UnlockAsync(_user), Times.Once);
             _identityMock.Verify(x => x.RevokeRefreshTokensAsync(_user), Times.Once);
             _identityMock.Verify(x => x.AccessFailedAsync(It.IsAny<User>()), Times.Never);
+        }
+
+        // ── Por e-mail ───────────────────────────────────────────────────────
+
+        private const string Email = "fulano@exemplo.com";
+
+        private static ForgotPasswordRequestDto ForgotByEmail(string email = " Fulano@Exemplo.com ") => new() { Email = email };
+
+        private static ResetPasswordWithCodeRequestDto ResetByEmail() =>
+            new() { Email = " Fulano@Exemplo.com ", Code = "123456", Password = "Senha@123", PasswordConfirm = "Senha@123" };
+
+        private void SetUpEmailAccount(User? user) =>
+            _identityMock.Setup(x => x.FindByNameAsync(Email)).ReturnsAsync(user);
+
+        private static User EmailUser() => new() { Id = "user-2", UserName = Email, Email = Email };
+
+        [Fact]
+        public async Task ForgotPasswordAsync_WhenEmailIsTheUserName_ShouldGenerateEmailCodeAndSendToNormalizedEmail()
+        {
+            var user = EmailUser();
+            SetUpEmailAccount(user);
+            _limiterMock.Setup(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), Email)).ReturnsAsync(true);
+            _identityMock.Setup(x => x.IsLockedOutAsync(user)).ReturnsAsync(false);
+            _identityMock.Setup(x => x.GeneratePasswordResetCodeAsync(user, VerificationChannel.Email)).ReturnsAsync("654321");
+
+            await CreateService().ForgotPasswordAsync(ForgotByEmail());
+
+            _senderMock.Verify(x => x.SendAsync(new VerificationCodeMessage(VerificationChannel.Email, Email, "654321", VerificationPurpose.PasswordReset)), Times.Once);
+        }
+
+        [Fact]
+        public async Task ForgotPasswordAsync_WhenEmailIsOnlyTheOptionalEmailOfAPhoneAccount_ShouldNotSendNorThrow()
+        {
+            SetUpEmailAccount(new User { Id = "user-3", UserName = Phone, Email = Email });
+
+            Func<Task> act = () => CreateService().ForgotPasswordAsync(ForgotByEmail());
+
+            await act.Should().NotThrowAsync();
+            _limiterMock.Verify(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), It.IsAny<string>()), Times.Never);
+            _senderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ForgotPasswordAsync_WhenEmailIsInvalid_ShouldNotSearchNorSendAndNotThrow()
+        {
+            Func<Task> act = () => CreateService().ForgotPasswordAsync(ForgotByEmail("nao-e-email"));
+
+            await act.Should().NotThrowAsync();
+            _identityMock.Verify(x => x.FindByNameAsync(It.IsAny<string>()), Times.Never);
+            _senderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ForgotPasswordAsync_WhenEmailLimitIsReached_ShouldNotSendNorThrow()
+        {
+            var user = EmailUser();
+            SetUpEmailAccount(user);
+            _limiterMock.Setup(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), Email)).ReturnsAsync(false);
+
+            Func<Task> act = () => CreateService().ForgotPasswordAsync(ForgotByEmail());
+
+            await act.Should().NotThrowAsync();
+            _senderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData(true, true)]
+        [InlineData(false, false)]
+        public async Task ForgotPasswordAsync_WhenBothOrNeitherIsInformed_ShouldThrowBadRequest(bool phone, bool email)
+        {
+            var dto = new ForgotPasswordRequestDto { Phone = phone ? "11987654312" : null, Email = email ? Email : null };
+
+            Func<Task> act = () => CreateService().ForgotPasswordAsync(dto);
+
+            await act.Should().ThrowAsync<BadRequestException>();
+        }
+
+        [Fact]
+        public async Task ResetPasswordAsync_WhenBothPhoneAndEmailAreInformed_ShouldThrowBadRequest()
+        {
+            var dto = ResetByEmail();
+            dto.Phone = "11987654312";
+
+            Func<Task> act = () => CreateService().ResetPasswordAsync(dto);
+
+            await act.Should().ThrowAsync<BadRequestException>();
+        }
+
+        [Fact]
+        public async Task ResetPasswordAsync_WhenEmailCodeIsValid_ShouldVerifyWithEmailChannelAndReset()
+        {
+            var user = EmailUser();
+            SetUpEmailAccount(user);
+            _identityMock.Setup(x => x.IsLockedOutAsync(user)).ReturnsAsync(false);
+            _identityMock.Setup(x => x.VerifyPasswordResetCodeAsync(user, "123456", VerificationChannel.Email)).ReturnsAsync(true);
+            _identityMock.Setup(x => x.ResetPasswordAsync(user, "Senha@123")).ReturnsAsync(Ok());
+
+            await CreateService().ResetPasswordAsync(ResetByEmail());
+
+            _identityMock.Verify(x => x.ResetPasswordAsync(user, "Senha@123"), Times.Once);
+            _identityMock.Verify(x => x.UnlockAsync(user), Times.Once);
+            _identityMock.Verify(x => x.RevokeRefreshTokensAsync(user), Times.Once);
+        }
+
+        [Fact]
+        public async Task ResetPasswordAsync_WhenEmailCodeIsInvalid_ShouldCountFailureAndThrowGenericBadRequest()
+        {
+            var user = EmailUser();
+            SetUpEmailAccount(user);
+            _identityMock.Setup(x => x.IsLockedOutAsync(user)).ReturnsAsync(false);
+            _identityMock.Setup(x => x.VerifyPasswordResetCodeAsync(user, "123456", VerificationChannel.Email)).ReturnsAsync(false);
+
+            Func<Task> act = () => CreateService().ResetPasswordAsync(ResetByEmail());
+
+            (await act.Should().ThrowAsync<BadRequestException>()).WithMessage(InvalidCodeMessage);
+            _identityMock.Verify(x => x.AccessFailedAsync(user), Times.Once);
+            _identityMock.Verify(x => x.ResetPasswordAsync(It.IsAny<User>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ResetPasswordAsync_WhenEmailIsNotTheUserName_ShouldThrowGenericBadRequestWithoutVerifyingCode()
+        {
+            SetUpEmailAccount(new User { Id = "user-3", UserName = Phone, Email = Email });
+
+            Func<Task> act = () => CreateService().ResetPasswordAsync(ResetByEmail());
+
+            (await act.Should().ThrowAsync<BadRequestException>()).WithMessage(InvalidCodeMessage);
+            _identityMock.Verify(x => x.VerifyPasswordResetCodeAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<VerificationChannel>()), Times.Never);
         }
 
         // ── ChangePasswordAsync ──────────────────────────────────────────────

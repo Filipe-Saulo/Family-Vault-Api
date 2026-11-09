@@ -47,6 +47,29 @@ namespace FamilyVaultApi.UnitTests.Services
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
+        [Theory]
+        [InlineData("fulano@exemplo.com", false, "email")]
+        [InlineData("+5511987654312", false, "phone_number")]
+        [InlineData("admin@exemplo.com", true, "email")]
+        public void GenerateAccessToken_ShouldPutIdentifierInTheClaimMatchingItsKind(string identifier, bool isAdmin, string expectedClaim)
+        {
+            var service = CreateService();
+
+            var token = service.GenerateAccessToken(new TokenClaimsData
+            {
+                UserId = "user-1",
+                Identifier = identifier,
+                IsAdmin = isAdmin,
+                IsUser = !isAdmin,
+                SecurityStamp = "stamp"
+            });
+
+            var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
+            jwt.Claims.Should().Contain(c => c.Type == expectedClaim && c.Value == identifier);
+            var other = expectedClaim == "email" ? "phone_number" : "email";
+            jwt.Claims.Should().NotContain(c => c.Type == other);
+        }
+
         [Fact]
         public void GetPrincipalFromExpiredToken_WhenTokenIsValid_ShouldReturnPrincipalWithUid()
         {

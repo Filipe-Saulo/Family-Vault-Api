@@ -16,7 +16,7 @@ flowchart LR
 - **Per-device sessions**: refresh tokens live in their own table, stored only as SHA-256 hashes and grouped in a family per login, so web, app and several devices coexist and logout ends only the current session
 - **Refresh token rotation** with an atomic swap and **reuse detection**: a token replayed after a 10 s grace window revokes only its own session, while concurrent refreshes and lost responses don't log anyone out
 - Account **lockout** (5 wrong passwords, 15 min) with a generic 401 that never reveals which accounts exist
-- Password recovery by 6-digit **code** sent by phone, with wrong guesses counting toward lockout
+- Password recovery by 6-digit **code** sent by SMS or e-mail (also used to confirm sign-up), with wrong guesses counting toward lockout
 - Categories are **global or personal**; changing or deleting one in use answers **409**
 - Standard error **envelope** (`ApiResponse<T>` with `traceId`), also for 401, 403 and 429
 - **Rate limiting** on auth endpoints
@@ -87,7 +87,7 @@ dotnet user-secrets set "AdminSeed:Email" "admin@example.com"
 dotnet user-secrets set "AdminSeed:Password" "ChangeMe123"
 ```
 
-Public sign-up (`POST /api/register`) only creates regular users by phone; further Administrators are created by an
+Public sign-up (`POST /api/register`) only creates regular users, by phone or e-mail confirmed with a code; further Administrators are created by an
 Administrator through `POST /api/User`.
 
 4. Apply database migrations:
@@ -113,17 +113,18 @@ dotnet run --project FamilyVaultApi
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/register` | Public sign-up of a regular User, by phone only (an e-mail is rejected); 201 on success |
+| POST | `/api/register/code` | Anonymous; body `{phoneNumber}` or `{email}` (exactly one, else 400); always answers 202 and sends a 6-digit code (valid 10 min) only if the destination has no account |
+| POST | `/api/register` | Public sign-up of a regular User; body has `code` plus `phoneNumber` or `email` (exactly one) and the profile fields; the destination becomes the login and is confirmed; bad code -> 400; 201 on success |
 | POST | `/api/web/login` | Authenticate; refresh token set as an HttpOnly, `SameSite=Lax`, `Path=/api` cookie (the web panel calls the API through its own origin via a proxy) |
 | POST | `/api/app/login` | Authenticate; refresh token returned in the response body |
 | POST | `/api/logout` | Anonymous; ends only the session of the given refresh token (body `{refreshToken}` or the web cookie) and clears the cookie; always 200, even with a missing or unknown token |
 | POST | `/api/web/refreshtoken` | Refresh access token; reads/writes the refresh token via cookie |
 | POST | `/api/app/refreshtoken` | Refresh access token; reads/writes the refresh token via request/response body |
-| POST | `/api/password/forgot` | Anonymous; body `{phone}`; always answers 202 (never reveals whether the account exists) and sends a 6-digit code by phone |
-| POST | `/api/password/reset` | Anonymous; body `{phone, code, password, passwordConfirm}`; invalid/expired code or locked account -> 400; a wrong code counts as a failed attempt; unlocks the account and revokes its sessions |
+| POST | `/api/password/forgot` | Anonymous; body `{phone}` or `{email}` (exactly one, else 400); always answers 202 (never reveals whether the account exists) and sends a 6-digit code by SMS or e-mail |
+| POST | `/api/password/reset` | Anonymous; body `{phone}` or `{email}`, plus `code, password, passwordConfirm`; invalid/expired code or locked account -> 400; a wrong code counts as a failed attempt; unlocks the account and revokes its sessions |
 | POST | `/api/password/change` | Administrator, User; body `{currentPassword, password, passwordConfirm}`; revokes the sessions (log in again) |
 
-> There is no SMS provider yet: `LoggingVerificationCodeSender` writes the recovery code to the log (`Código de recuperação para ***1234: 123456`) **only in Development**; in other environments it logs just that a code was generated.
+> Codes go out by Twilio (SMS) and Resend (e-mail) outside Development/Testing; the API refuses to start without `Sms__Twilio__AccountSid`, `Sms__Twilio__AuthToken`, `Sms__Twilio__From`, `Email__Resend__ApiKey` and `Email__Resend__From`. In Development/Testing `LoggingVerificationCodeSender` is used instead and writes the code to the log (`Código de verificação (PasswordReset, Sms) para ***1234: 123456`) **only in Development**; elsewhere it logs just that a code was generated. Send limit per phone/e-mail: `VerificationCode:SendLimit` (1/min, 5/day).
 
 ### Category
 

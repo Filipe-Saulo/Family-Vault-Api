@@ -19,8 +19,19 @@ namespace FamilyVaultApi.Controllers
             _accountService = accountService;
         }
 
+        [HttpPost("register/code")]
+        public async Task<ActionResult<ApiResponse<object>>> SendRegistrationCode([FromBody] RegistrationCodeRequestDto dto)
+        {
+            if (dto == null)
+                return BadRequest(ApiResponse<object>.BadRequest(StandardMessages.NullBody));
+
+            await _accountService.SendRegistrationCodeAsync(dto);
+            return StatusCode(StatusCodes.Status202Accepted,
+                ApiResponse<object>.Accepted("Se o telefone ou e-mail puder ser cadastrado, enviaremos um código."));
+        }
+
         [HttpPost("register")]
-        public async Task<ActionResult<ApiResponse<string>>> Register([FromBody] CreateAccountRequestDto createAccountDto)
+        public async Task<ActionResult<ApiResponse<string>>> Register([FromBody] RegisterAccountRequestDto createAccountDto)
         {
             if (createAccountDto == null)
                 return BadRequest(ApiResponse<string>.BadRequest(StandardMessages.NullBody));

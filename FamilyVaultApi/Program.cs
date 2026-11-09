@@ -4,6 +4,7 @@ using FamilyVaultApi.Data;
 using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Mapping;
 using FamilyVaultApi.Middleware;
+using FamilyVaultApi.Models.Internal;
 using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Repositories.Repository;
@@ -26,6 +27,15 @@ var jwtKey = builder.Configuration["JwtSettings:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32)
     throw new InvalidOperationException(
         "JwtSettings:Key ausente ou com menos de 32 bytes. Em desenvolvimento use 'dotnet user-secrets set \"JwtSettings:Key\" \"<32+ caracteres>\"'; nos demais ambientes, a variável JwtSettings__Key.");
+
+// Em Development e Testing o código fica no log; nos demais ambientes a API não sobe sem os provedores de SMS e de e-mail
+var useRealDelivery = !builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("Testing");
+if (useRealDelivery && new[] { "AccountSid", "AuthToken", "From" }.Any(name => string.IsNullOrWhiteSpace(builder.Configuration[$"Sms:Twilio:{name}"])))
+    throw new InvalidOperationException(
+        "Credenciais da Twilio ausentes. Defina as variáveis Sms__Twilio__AccountSid, Sms__Twilio__AuthToken e Sms__Twilio__From.");
+if (useRealDelivery && new[] { "ApiKey", "From" }.Any(name => string.IsNullOrWhiteSpace(builder.Configuration[$"Email:Resend:{name}"])))
+    throw new InvalidOperationException(
+        "Credenciais do Resend ausentes. Defina as variáveis Email__Resend__ApiKey e Email__Resend__From.");
 
 
 // Add services to the container.
@@ -134,7 +144,30 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddSingleton<IPhoneNumberService, PhoneNumberService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
-builder.Services.AddSingleton<IVerificationCodeSender, LoggingVerificationCodeSender>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.Configure<VerificationSendLimitOptions>(builder.Configuration.GetSection("VerificationCode:SendLimit"));
+builder.Services.AddScoped<IVerificationSendLimiter, DbVerificationSendLimiter>();
+builder.Services.AddScoped<IRegistrationCodeStore, DbRegistrationCodeStore>();
+builder.Services.AddScoped<VerificationDataCleaner>();
+builder.Services.AddHostedService<VerificationDataCleanupService>();
+if (useRealDelivery)
+{
+    builder.Services.Configure<TwilioSmsOptions>(builder.Configuration.GetSection("Sms:Twilio"));
+    builder.Services.AddHttpClient(TwilioVerificationCodeSender.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+    builder.Services.AddKeyedSingleton<IVerificationCodeSender, TwilioVerificationCodeSender>(VerificationCodeQueue.SmsDeliveryKey);
+
+    builder.Services.Configure<ResendEmailOptions>(builder.Configuration.GetSection("Email:Resend"));
+    builder.Services.AddHttpClient(ResendVerificationCodeSender.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+    builder.Services.AddKeyedSingleton<IVerificationCodeSender, ResendVerificationCodeSender>(VerificationCodeQueue.EmailDeliveryKey);
+}
+else
+{
+    builder.Services.AddKeyedSingleton<IVerificationCodeSender, LoggingVerificationCodeSender>(VerificationCodeQueue.SmsDeliveryKey);
+    builder.Services.AddKeyedSingleton<IVerificationCodeSender, LoggingVerificationCodeSender>(VerificationCodeQueue.EmailDeliveryKey);
+}
+builder.Services.AddSingleton<VerificationCodeQueue>();
+builder.Services.AddSingleton<IVerificationCodeSender>(provider => provider.GetRequiredService<VerificationCodeQueue>());
+builder.Services.AddHostedService<VerificationCodeDispatcher>();
 //user
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();

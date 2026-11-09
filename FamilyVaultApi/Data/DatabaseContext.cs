@@ -16,6 +16,8 @@ namespace FamilyVaultApi.Data
         public DbSet<TransactionType> TransactionTypes { get; set; }
         public DbSet<Transaction> Transactions { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<VerificationCode> VerificationCodes { get; set; }
+        public DbSet<VerificationSendLimit> VerificationSendLimits { get; set; }
 
         public DatabaseContext(DbContextOptions options) : base(options)
         {
@@ -44,6 +46,8 @@ namespace FamilyVaultApi.Data
             modelBuilder.ApplyConfiguration(new TransactionConfiguration());
             modelBuilder.ApplyConfiguration(new RoleConfiguration());
             modelBuilder.ApplyConfiguration(new RefreshTokenConfiguration());
+            modelBuilder.ApplyConfiguration(new VerificationCodeConfiguration());
+            modelBuilder.ApplyConfiguration(new VerificationSendLimitConfiguration());
 
             SeedData(modelBuilder);           
 
