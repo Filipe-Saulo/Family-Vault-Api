@@ -145,6 +145,17 @@ dotnet run --project FamilyVaultApi
 | PUT | `/api/transaction/{id}` | Administrator, `ManageTransactions`, or the owner |
 | DELETE | `/api/transaction/{id}` | Administrator, `ManageTransactions`, or the owner |
 
+### Charge (bills by upload)
+
+| Method | Endpoint | Roles |
+|---|---|---|
+| POST | `/api/charge/upload` | Administrator, User — multipart `file` (PDF, JPEG or PNG, up to 10 MB); answers 202 `{documentId}`, 429 over the daily limit; the same file sent twice returns the existing `documentId` (if that document failed, it goes back to the queue) |
+| GET | `/api/charge` | Administrator, User — only the caller's own charges; filter `status` (`PendingReview`, `Confirmed`, `Dismissed`) |
+| GET | `/api/charge/{id}` | Administrator, User — owner only (404 missing, 403 other user's) |
+| GET | `/api/charge/failures` | Administrator, User — the caller's documents that failed, with the visible reason |
+| POST | `/api/charge/{id}/confirm` | Administrator, User — owner only; `description`, `amount`, `dueDate`, `categoryId`; creates the expense (date = due date), 201 with the transaction, 409 if already decided |
+| POST | `/api/charge/{id}/dismiss` | Administrator, User — owner only; optional `{ignoreSender}` (ignored for now), 204, 409 if already decided |
+
 ### TransactionType / CategoryPurpose (lookups)
 
 | Method | Endpoint | Roles |

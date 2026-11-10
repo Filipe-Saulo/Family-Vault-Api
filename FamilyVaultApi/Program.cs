@@ -183,6 +183,14 @@ builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 //transaction type
 builder.Services.AddScoped<ITransactionTypeService, TransactionTypeService>();
 builder.Services.AddScoped<ITransactionTypeRepository, TransactionTypeRepository>();
+//charge
+builder.Services.Configure<ChargeProcessingOptions>(builder.Configuration.GetSection("Charges"));
+builder.Services.AddScoped<IChargeService, ChargeService>();
+builder.Services.AddScoped<IChargeRepository, ChargeRepository>();
+// Por fábrica: o IChargeExtractor só existe a partir do lote Evals, e a validação de DI do ambiente Development
+// recusaria o registro direto. O worker só resolve o processador quando há extrator registrado.
+builder.Services.AddScoped(sp => ActivatorUtilities.CreateInstance<ChargeDocumentProcessor>(sp));
+builder.Services.AddHostedService<ChargeProcessingWorker>();
 //dashboard
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
