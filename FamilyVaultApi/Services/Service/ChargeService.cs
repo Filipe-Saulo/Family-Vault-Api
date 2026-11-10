@@ -19,13 +19,15 @@ namespace FamilyVaultApi.Services.Service
     public class ChargeService : IChargeService
     {
         private readonly IChargeRepository _repository;
+        private readonly IGmailRepository _gmailRepository;
         private readonly ITransactionService _transactionService;
         private readonly ChargeProcessingOptions _options;
         private readonly TimeProvider _timeProvider;
 
-        public ChargeService(IChargeRepository repository, ITransactionService transactionService, IOptions<ChargeProcessingOptions> options, TimeProvider timeProvider)
+        public ChargeService(IChargeRepository repository, IGmailRepository gmailRepository, ITransactionService transactionService, IOptions<ChargeProcessingOptions> options, TimeProvider timeProvider)
         {
             _repository = repository;
+            _gmailRepository = gmailRepository;
             _transactionService = transactionService;
             _options = options.Value;
             _timeProvider = timeProvider;
@@ -138,11 +140,18 @@ namespace FamilyVaultApi.Services.Service
 
         public async Task DismissAsync(int id, DismissChargeDto? dto, ClaimsPrincipal userClaims)
         {
-            await EnsureOwnerAsync(id, userClaims);
+            var ownerUserId = await EnsureOwnerAsync(id, userClaims);
 
-            // dto.IgnoreSender é ignorado até a leitura de e-mail existir
             if (!await _repository.TryDismissAsync(id))
                 throw new ConflictException("Esta conta já foi confirmada ou descartada.");
+
+            // Só e-mail tem remetente; no upload, ignoreSender não tem efeito
+            if (dto?.IgnoreSender == true)
+            {
+                var document = await _repository.GetDocumentSenderAsync(id);
+                if (document is { Source: InboundDocumentSource.Gmail, Sender: { Length: > 0 and <= GmailIgnoredSender.MaxSenderLength } })
+                    await _gmailRepository.AddIgnoredSenderAsync(ownerUserId, document.Value.Sender!, _timeProvider.GetUtcNow().UtcDateTime);
+            }
         }
 
         // Charge é pessoal: nem o Administrator mexe na de outro usuário

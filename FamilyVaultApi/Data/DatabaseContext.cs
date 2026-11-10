@@ -20,6 +20,10 @@ namespace FamilyVaultApi.Data
         public DbSet<VerificationSendLimit> VerificationSendLimits { get; set; }
         public DbSet<InboundDocument> InboundDocuments { get; set; }
         public DbSet<Charge> Charges { get; set; }
+        public DbSet<GmailConnection> GmailConnections { get; set; }
+        public DbSet<GmailScan> GmailScans { get; set; }
+        public DbSet<GmailIgnoredSender> GmailIgnoredSenders { get; set; }
+        public DbSet<GmailOAuthState> GmailOAuthStates { get; set; }
 
         public DatabaseContext(DbContextOptions options) : base(options)
         {
@@ -52,6 +56,10 @@ namespace FamilyVaultApi.Data
             modelBuilder.ApplyConfiguration(new VerificationSendLimitConfiguration());
             modelBuilder.ApplyConfiguration(new InboundDocumentConfiguration());
             modelBuilder.ApplyConfiguration(new ChargeConfiguration());
+            modelBuilder.ApplyConfiguration(new GmailConnectionConfiguration());
+            modelBuilder.ApplyConfiguration(new GmailScanConfiguration());
+            modelBuilder.ApplyConfiguration(new GmailIgnoredSenderConfiguration());
+            modelBuilder.ApplyConfiguration(new GmailOAuthStateConfiguration());
 
             SeedData(modelBuilder);           
 

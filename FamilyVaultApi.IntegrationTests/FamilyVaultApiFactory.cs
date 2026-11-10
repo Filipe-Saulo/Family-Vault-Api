@@ -18,6 +18,10 @@ namespace FamilyVaultApi.IntegrationTests
     public class FamilyVaultApiFactory : WebApplicationFactory<Program>
     {
         private const string JwtKey = "integration-tests-jwt-key-with-32-plus-bytes";
+        // Chave fixa só dos testes (32 bytes em base64); a real fica em user-secrets ou Gmail__TokenEncryptionKey
+        public const string GmailTokenKey = "dGVzdGVzLWRlLWludGVncmFjYW8tY2hhdmUtMzJieXQ=";
+        public const string AppReturnUrl = "familyvault://gmail";
+        public const string WebReturnUrl = "http://localhost:5173/gmail";
 
         private readonly SqliteConnection _connection;
         private readonly string? _adminEmail;
@@ -26,6 +30,9 @@ namespace FamilyVaultApi.IntegrationTests
 
         // Extrator falso das contas por upload: o teste configura o resultado por marcador nos bytes
         public FakeChargeExtractor ChargeExtractor { get; } = new();
+
+        // Gmail falso: o teste monta a caixa de e-mail e as autorizações
+        public FakeGmailApiClient GmailClient { get; } = new();
 
         public FamilyVaultApiFactory(string? adminEmail, string? adminPassword, Action<DatabaseContext>? seedBeforeStartup = null,
             IDictionary<string, string?>? settings = null)
@@ -56,6 +63,14 @@ namespace FamilyVaultApi.IntegrationTests
             builder.UseSetting("Charges:Worker:RetryDelaySeconds", "0");
             builder.UseSetting("Charges:DailyLimits:PerUser", "1000");
             builder.UseSetting("Charges:DailyLimits:Total", "100000");
+            // Gmail ligado com credenciais de mentira; o cliente do Google é trocado pelo falso abaixo
+            builder.UseSetting("Gmail:ClientId", "test-client-id");
+            builder.UseSetting("Gmail:ClientSecret", "test-client-secret");
+            builder.UseSetting("Gmail:TokenEncryptionKey", GmailTokenKey);
+            builder.UseSetting("Gmail:RedirectUri", "https://localhost/api/gmail/callback");
+            builder.UseSetting("Gmail:AllowedReturnUrls:0", AppReturnUrl);
+            builder.UseSetting("Gmail:AllowedReturnUrls:1", WebReturnUrl);
+            builder.UseSetting("Gmail:ManualScanMinIntervalSeconds", "0");
             foreach (var (key, value) in _settings ?? new Dictionary<string, string?>())
                 builder.UseSetting(key, value);
 
@@ -64,6 +79,8 @@ namespace FamilyVaultApi.IntegrationTests
                 services.AddDbContext<DatabaseContext>(options => options.UseSqlite(_connection));
                 services.RemoveAll<IChargeExtractor>();
                 services.AddSingleton<IChargeExtractor>(ChargeExtractor);
+                services.RemoveAll<IGmailApiClient>();
+                services.AddSingleton<IGmailApiClient>(GmailClient);
             });
         }
 

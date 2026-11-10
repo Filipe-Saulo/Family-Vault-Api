@@ -50,6 +50,8 @@ namespace FamilyVaultApi.Data.Configurations
 
             builder.Property(d => d.ProcessingStartedAt).HasColumnName("processing_started_at");
 
+            builder.Property(d => d.GmailScanId).HasColumnName("gmail_scan_id");
+
             builder.Property(d => d.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -66,6 +68,12 @@ namespace FamilyVaultApi.Data.Configurations
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_inbound_documents_user")
                 .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(d => d.GmailScan)
+                .WithMany()
+                .HasForeignKey(d => d.GmailScanId)
+                .HasConstraintName("fk_inbound_documents_gmail_scan")
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }

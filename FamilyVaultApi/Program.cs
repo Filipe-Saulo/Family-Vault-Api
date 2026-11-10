@@ -188,6 +188,27 @@ builder.Services.AddScoped<ITransactionTypeRepository, TransactionTypeRepository
 builder.Services.Configure<ChargeProcessingOptions>(builder.Configuration.GetSection("Charges"));
 builder.Services.AddScoped<IChargeService, ChargeService>();
 builder.Services.AddScoped<IChargeRepository, ChargeRepository>();
+//gmail
+// Client id, secret e chave do token em user-secrets ou nas variáveis Gmail__*. Sem os três, a integração fica
+// desligada (rotas de conexão e verificação respondem 400) e o resto da API sobe normalmente.
+builder.Services.Configure<GmailOptions>(builder.Configuration.GetSection("Gmail"));
+builder.Services.AddScoped<IGmailRepository, GmailRepository>();
+builder.Services.AddScoped<IGmailConnectionService, GmailConnectionService>();
+var gmailOptions = builder.Configuration.GetSection("Gmail").Get<GmailOptions>() ?? new GmailOptions();
+if (gmailOptions.IsConfigured)
+{
+    GmailTokenProtector.ParseKey(gmailOptions.TokenEncryptionKey);
+    if (!Uri.TryCreate(gmailOptions.RedirectUri, UriKind.Absolute, out _))
+        throw new InvalidOperationException("Gmail:RedirectUri ausente ou inválida: use a URI do GET /api/gmail/callback cadastrada no Google Cloud.");
+    if (gmailOptions.AllowedReturnUrls.Count == 0)
+        throw new InvalidOperationException("Gmail:AllowedReturnUrls vazia: informe para onde o callback volta (app e painel).");
+
+    builder.Services.AddSingleton<Google.Apis.Http.IHttpClientFactory>(new Google.Apis.Http.HttpClientFactory());
+    builder.Services.AddSingleton<GmailTokenProtector>();
+    builder.Services.AddSingleton<IGmailApiClient, GoogleGmailApiClient>();
+    builder.Services.AddScoped<GmailDocumentFetcher>();
+    builder.Services.AddScoped<GmailScanProcessor>();
+}
 // Extrator real só com a chave configurada (user-secrets ou Ai__ApiKey). Sem ela, nada é registrado e os documentos
 // ficam Pending, como antes.
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("Ai"));

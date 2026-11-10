@@ -16,20 +16,26 @@ namespace FamilyVaultApi.Services.Service
         private const int CandidatesPerCall = 10;
         private const string PasswordProtectedReason = "O PDF está protegido por senha.";
         private const string GenericFailureReason = "Não foi possível processar o documento.";
+        private const string UnreadableReason = "O documento está ilegível.";
+        private const string EmailGoneReason = "O e-mail não está mais disponível no Gmail.";
 
         private readonly IChargeRepository _repository;
         private readonly IChargeExtractor _extractor;
         private readonly ChargeProcessingOptions _options;
         private readonly TimeProvider _timeProvider;
         private readonly ILogger<ChargeDocumentProcessor> _logger;
+        // Nulo quando o Gmail não está configurado: documento do Gmail volta à fila sem gastar tentativa
+        private readonly GmailDocumentFetcher? _gmailFetcher;
 
-        public ChargeDocumentProcessor(IChargeRepository repository, IChargeExtractor extractor, IOptions<ChargeProcessingOptions> options, TimeProvider timeProvider, ILogger<ChargeDocumentProcessor> logger)
+        public ChargeDocumentProcessor(IChargeRepository repository, IChargeExtractor extractor, IOptions<ChargeProcessingOptions> options, TimeProvider timeProvider, ILogger<ChargeDocumentProcessor> logger,
+            GmailDocumentFetcher? gmailFetcher = null)
         {
             _repository = repository;
             _extractor = extractor;
             _options = options.Value;
             _timeProvider = timeProvider;
             _logger = logger;
+            _gmailFetcher = gmailFetcher;
         }
 
         // Devolve o que ficou preso em Processing (reinício no meio do processamento)
@@ -63,24 +69,70 @@ namespace FamilyVaultApi.Services.Service
                 if (document == null)
                     continue;
 
-                if (document.Source != InboundDocumentSource.Upload)
+                if (document.Source == InboundDocumentSource.Gmail)
                 {
-                    await _repository.ReturnDocumentToPendingAsync(documentId);
-                    return false;
+                    if (_gmailFetcher == null)
+                    {
+                        await _repository.ReleaseDocumentAsync(documentId);
+                        return false;
+                    }
+
+                    var content = await FetchFromGmailAsync(document, cancellationToken);
+                    if (content != null)
+                        await ProcessAsync(document, content, "application/pdf", now, cancellationToken);
+
+                    return true;
                 }
 
-                await ProcessAsync(document, now, cancellationToken);
+                await ProcessAsync(document, document.TemporaryContent ?? [], document.ContentType ?? "", now, cancellationToken);
                 return true;
             }
 
             return false;
         }
 
-        private async Task ProcessAsync(InboundDocument document, DateTime now, CancellationToken cancellationToken)
+        // null = o documento já foi tratado (devolvido à fila ou terminado com falha)
+        private async Task<byte[]?> FetchFromGmailAsync(InboundDocument document, CancellationToken cancellationToken)
         {
-            var content = document.TemporaryContent ?? [];
-            var contentType = document.ContentType ?? "";
+            byte[] content;
+            try
+            {
+                content = await _gmailFetcher!.FetchAsync(document, cancellationToken);
+            }
+            catch (GmailAccessRevokedException)
+            {
+                // Conexão revogada ou removida: espera a reconexão sem gastar tentativa
+                await _repository.ReleaseDocumentAsync(document.InboundDocumentId);
+                return null;
+            }
+            catch (GmailMessageNotFoundException)
+            {
+                await FailAsync(document, EmailGoneReason);
+                return null;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError("Falha ao baixar do Gmail o documento {DocumentId} (tentativa {Attempt}): {ExceptionType}.", document.InboundDocumentId, document.Attempts, ex.GetType().Name);
 
+                if (document.Attempts < _options.Worker.MaxAttempts)
+                    await _repository.ReturnDocumentToPendingAsync(document.InboundDocumentId);
+                else
+                    await FailAsync(document, GenericFailureReason);
+
+                return null;
+            }
+
+            if (!content.AsSpan().StartsWith("%PDF"u8))
+            {
+                await FailAsync(document, UnreadableReason);
+                return null;
+            }
+
+            return content;
+        }
+
+        private async Task ProcessAsync(InboundDocument document, byte[] content, string contentType, DateTime now, CancellationToken cancellationToken)
+        {
             if (contentType == "application/pdf" && IsPasswordProtected(content))
             {
                 await FailAsync(document, PasswordProtectedReason);

@@ -20,7 +20,15 @@ namespace FamilyVaultApi.IntegrationTests.Http
         private readonly Dictionary<int, (string UserId, string Token)> _users = new();
         private string? _adminToken;
 
-        public FamilyVaultApiFactory Factory { get; } = new(AdminEmail, AdminPassword);
+        public FamilyVaultApiFactory Factory { get; }
+
+        public ApiFixture() : this(null) { }
+
+        // Fixture com configuração própria (ex.: limite do login maior, para criar um usuário logado por teste)
+        protected ApiFixture(IDictionary<string, string?>? settings)
+        {
+            Factory = new FamilyVaultApiFactory(AdminEmail, AdminPassword, settings: settings);
+        }
 
         public HttpClient AnonymousClient() => Factory.CreateClient();
 
@@ -81,6 +89,14 @@ namespace FamilyVaultApi.IntegrationTests.Http
 
             var envelope = await created.ReadEnvelopeAsync<CreatedUser>();
             return (envelope.Data!.UserId, phone);
+        }
+
+        // Usuário novo e já logado (gasta um login: use numa fixture com o limite do login folgado)
+        public async Task<(string UserId, HttpClient Client)> NewUserClientAsync()
+        {
+            var (_, phone) = await NewUserAsync();
+            var auth = await LoginAsync(new { phone, password = UserPassword });
+            return (auth.UserId, ClientWithToken(auth.Token));
         }
 
         public void Dispose() => Factory.Dispose();

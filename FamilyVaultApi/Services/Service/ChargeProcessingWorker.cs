@@ -4,7 +4,8 @@ using Microsoft.Extensions.Options;
 
 namespace FamilyVaultApi.Services.Service
 {
-    // Lê do banco a cada tick (sobrevive a reinício). Sem IChargeExtractor registrado, não faz nada.
+    // Lê do banco a cada tick (sobrevive a reinício). Etapa 1: as verificações do Gmail (só com o Gmail configurado).
+    // Etapa 2: os documentos (só com IChargeExtractor registrado).
     public class ChargeProcessingWorker : BackgroundService
     {
         // Config zerada ou negativa derrubaria o host no PeriodicTimer
@@ -33,6 +34,10 @@ namespace FamilyVaultApi.Services.Service
                 try
                 {
                     using var scope = _scopeFactory.CreateScope();
+
+                    var scanProcessor = scope.ServiceProvider.GetService<GmailScanProcessor>();
+                    if (scanProcessor != null)
+                        await scanProcessor.ProcessNextScanAsync(stoppingToken);
 
                     if (scope.ServiceProvider.GetService<IChargeExtractor>() == null)
                         continue;
