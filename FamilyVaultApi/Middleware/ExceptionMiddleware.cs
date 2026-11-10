@@ -67,6 +67,20 @@ namespace FamilyVaultApi.Middleware
                 _logger.LogWarning(ex, "Conflito de regra de negócio. TraceId={TraceId}", traceId);
                 await HandleExceptionAsync(context, HttpStatusCode.Conflict, ex.Message, traceId);
             }
+            catch (TooManyRequestsException ex)
+            {
+                _logger.LogWarning(ex, "Limite excedido. TraceId={TraceId}", traceId);
+                await HandleExceptionAsync(context, HttpStatusCode.TooManyRequests, ex.Message, traceId);
+            }
+            catch (BadHttpRequestException ex)
+            {
+                // Corpo acima do limite (413) ou malformado, detectado pelo servidor ao ler o request
+                _logger.LogWarning(ex, "Requisição recusada pelo servidor. TraceId={TraceId}", traceId);
+                var message = ex.StatusCode == StatusCodes.Status413PayloadTooLarge
+                    ? "A requisição excede o tamanho máximo permitido."
+                    : "Requisição inválida.";
+                await HandleExceptionAsync(context, (HttpStatusCode)ex.StatusCode, message, traceId);
+            }
             catch (DbUpdateException ex)
             {
                 _logger.LogWarning(ex, "Conflito ao gravar no banco. TraceId={TraceId}", traceId);

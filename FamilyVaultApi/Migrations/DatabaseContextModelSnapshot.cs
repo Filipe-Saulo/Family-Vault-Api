@@ -197,6 +197,178 @@ namespace FamilyVaultApi.Migrations
                         });
                 });
 
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.Charge", b =>
+                {
+                    b.Property<int>("ChargeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("charge_id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("ChargeId"));
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("decimal(15,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(48)
+                        .HasColumnType("varchar(48)")
+                        .HasColumnName("barcode");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("description");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("due_date");
+
+                    b.Property<int>("InboundDocumentId")
+                        .HasColumnType("int")
+                        .HasColumnName("inbound_document_id");
+
+                    b.Property<string>("Issuer")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("issuer");
+
+                    b.Property<int?>("PossibleDuplicateTransactionId")
+                        .HasColumnType("int")
+                        .HasColumnName("possible_duplicate_transaction_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int?>("SuggestedCategoryId")
+                        .HasColumnType("int")
+                        .HasColumnName("suggested_category_id");
+
+                    b.Property<int?>("TransactionId")
+                        .HasColumnType("int")
+                        .HasColumnName("transaction_id");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("varchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("ChargeId");
+
+                    b.HasIndex("InboundDocumentId")
+                        .IsUnique()
+                        .HasDatabaseName("idx_charges_inbound_document");
+
+                    b.HasIndex("PossibleDuplicateTransactionId");
+
+                    b.HasIndex("SuggestedCategoryId");
+
+                    b.HasIndex("TransactionId");
+
+                    b.HasIndex("UserId", "Barcode")
+                        .HasDatabaseName("idx_charges_user_barcode");
+
+                    b.HasIndex("UserId", "Status")
+                        .HasDatabaseName("idx_charges_user_status");
+
+                    b.ToTable("charges", (string)null);
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.InboundDocument", b =>
+                {
+                    b.Property<int>("InboundDocumentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("inbound_document_id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("InboundDocumentId"));
+
+                    b.Property<int>("Attempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("attempts");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("external_id");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<DateTime?>("ProcessingStartedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("processing_started_at");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("Sender")
+                        .HasMaxLength(320)
+                        .HasColumnType("varchar(320)")
+                        .HasColumnName("sender");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("source");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<byte[]>("TemporaryContent")
+                        .HasColumnType("longblob")
+                        .HasColumnName("temporary_content");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("varchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("InboundDocumentId");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("idx_inbound_documents_status_created");
+
+                    b.HasIndex("UserId", "ExternalId")
+                        .IsUnique()
+                        .HasDatabaseName("idx_inbound_documents_user_external");
+
+                    b.ToTable("inbound_documents", (string)null);
+                });
+
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.RefreshToken", b =>
                 {
                     b.Property<long>("RefreshTokenId")
@@ -784,6 +956,63 @@ namespace FamilyVaultApi.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.Charge", b =>
+                {
+                    b.HasOne("FamilyVaultApi.Data.Entities.InboundDocument", "InboundDocument")
+                        .WithOne("Charge")
+                        .HasForeignKey("FamilyVaultApi.Data.Entities.Charge", "InboundDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_charges_inbound_document");
+
+                    b.HasOne("FamilyVaultApi.Data.Entities.Transaction", "PossibleDuplicateTransaction")
+                        .WithMany()
+                        .HasForeignKey("PossibleDuplicateTransactionId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_charges_possible_duplicate_transaction");
+
+                    b.HasOne("FamilyVaultApi.Data.Entities.Category", "SuggestedCategory")
+                        .WithMany()
+                        .HasForeignKey("SuggestedCategoryId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_charges_suggested_category");
+
+                    b.HasOne("FamilyVaultApi.Data.Entities.Transaction", "Transaction")
+                        .WithMany()
+                        .HasForeignKey("TransactionId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_charges_transaction");
+
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_charges_user");
+
+                    b.Navigation("InboundDocument");
+
+                    b.Navigation("PossibleDuplicateTransaction");
+
+                    b.Navigation("SuggestedCategory");
+
+                    b.Navigation("Transaction");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.InboundDocument", b =>
+                {
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_inbound_documents_user");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.RefreshToken", b =>
                 {
                     b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
@@ -885,6 +1114,11 @@ namespace FamilyVaultApi.Migrations
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.CategoryPurpose", b =>
                 {
                     b.Navigation("Categories");
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.InboundDocument", b =>
+                {
+                    b.Navigation("Charge");
                 });
 
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.TransactionType", b =>

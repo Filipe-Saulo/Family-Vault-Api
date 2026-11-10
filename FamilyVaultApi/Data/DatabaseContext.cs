@@ -18,6 +18,8 @@ namespace FamilyVaultApi.Data
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<VerificationCode> VerificationCodes { get; set; }
         public DbSet<VerificationSendLimit> VerificationSendLimits { get; set; }
+        public DbSet<InboundDocument> InboundDocuments { get; set; }
+        public DbSet<Charge> Charges { get; set; }
 
         public DatabaseContext(DbContextOptions options) : base(options)
         {
@@ -48,6 +50,8 @@ namespace FamilyVaultApi.Data
             modelBuilder.ApplyConfiguration(new RefreshTokenConfiguration());
             modelBuilder.ApplyConfiguration(new VerificationCodeConfiguration());
             modelBuilder.ApplyConfiguration(new VerificationSendLimitConfiguration());
+            modelBuilder.ApplyConfiguration(new InboundDocumentConfiguration());
+            modelBuilder.ApplyConfiguration(new ChargeConfiguration());
 
             SeedData(modelBuilder);           
 

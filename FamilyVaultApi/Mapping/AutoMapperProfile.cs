@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Models.Dto.Requests.Category;
+using FamilyVaultApi.Models.Dto.Responses.Charge;
 using FamilyVaultApi.Models.Dto.Requests.CategoryPurpose;
 using FamilyVaultApi.Models.Dto.Requests.Transaction;
 using FamilyVaultApi.Models.Dto.Requests.TransactionType;
@@ -69,6 +70,15 @@ namespace FamilyVaultApi.Mapping
 
             CreateMap<CategoryPurpose, CategoryPurposeResponseDto>()
                 .ForMember(d => d.Code, opt => opt.MapFrom(src => Enum.Parse<CategoryPurposeCode>(src.Code, true)));
+
+            CreateMap<Charge, ChargeResponseDto>()
+                .ForMember(d => d.DocumentId, opt => opt.MapFrom(src => src.InboundDocumentId))
+                .ForMember(d => d.Source, opt => opt.MapFrom(src => src.InboundDocument.Source.ToString()))
+                .ForMember(d => d.Status, opt => opt.MapFrom(src => src.Status.ToString()));
+
+            CreateMap<InboundDocument, ChargeFailureResponseDto>()
+                .ForMember(d => d.DocumentId, opt => opt.MapFrom(src => src.InboundDocumentId))
+                .ForMember(d => d.Source, opt => opt.MapFrom(src => src.Source.ToString()));
 
             CreateMap<CreateTransactionTypeDto, TransactionType>()
                 .ForMember(d => d.Code, opt => opt.Ignore())
