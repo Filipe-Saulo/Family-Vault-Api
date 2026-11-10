@@ -77,6 +77,16 @@ namespace FamilyVaultApi.Repositories.Repository
             return rows > 0;
         }
 
+        public async Task<(InboundDocumentSource Source, string? Sender)?> GetDocumentSenderAsync(int chargeId)
+        {
+            var document = await _context.Charges
+                .Where(c => c.ChargeId == chargeId)
+                .Select(c => new { c.InboundDocument.Source, c.InboundDocument.Sender })
+                .FirstOrDefaultAsync();
+
+            return document == null ? null : (document.Source, document.Sender);
+        }
+
         public async Task<string?> GetOwnerUserIdAsync(int chargeId)
         {
             return await _context.Charges
@@ -198,6 +208,9 @@ namespace FamilyVaultApi.Repositories.Repository
 
             return await _context.InboundDocuments
                 .Where(d => d.Status == InboundDocumentStatus.Pending && !blockedUsers.Contains(d.UserId))
+                // Documento do Gmail só anda com a conexão ativa; desconectado ou revogado, espera a reconexão
+                .Where(d => d.Source == InboundDocumentSource.Upload
+                    || _context.GmailConnections.Any(c => c.UserId == d.UserId && c.Status == GmailConnectionStatus.Active))
                 // Quem voltou da tentativa anterior espera o intervalo antes da próxima
                 .Where(d => d.ProcessingStartedAt == null || d.ProcessingStartedAt <= retryReadyBefore)
                 .OrderBy(d => d.CreatedAt)
@@ -233,6 +246,17 @@ namespace FamilyVaultApi.Repositories.Repository
                 .ExecuteUpdateAsync(s => s.SetProperty(d => d.Status, InboundDocumentStatus.Pending));
         }
 
+        // Devolve à fila sem gastar a tentativa nem contar no limite do dia (o Gmail ficou indisponível para a pessoa)
+        public async Task ReleaseDocumentAsync(int documentId)
+        {
+            await _context.InboundDocuments
+                .Where(d => d.InboundDocumentId == documentId && d.Status == InboundDocumentStatus.Processing)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(d => d.Status, InboundDocumentStatus.Pending)
+                    .SetProperty(d => d.Attempts, d => d.Attempts > 0 ? d.Attempts - 1 : 0)
+                    .SetProperty(d => d.ProcessingStartedAt, (DateTime?)null));
+        }
+
         // Termina o documento, apaga o conteúdo e grava a charge (se houver) no mesmo SaveChanges
         public async Task CompleteDocumentAsync(int documentId, InboundDocumentStatus status, string? failureReason, Charge? charge)
         {
@@ -249,11 +273,34 @@ namespace FamilyVaultApi.Repositories.Repository
             }
 
             await _context.SaveChangesAsync();
+
+            if (document.GmailScanId.HasValue)
+                await UpdateScanProgressAsync(new List<int> { document.GmailScanId.Value });
+        }
+
+        // processed da verificação = documentos dela que terminaram (Done ou Failed); recontado em vez de somado,
+        // para um documento terminado por caminhos diferentes não contar duas vezes
+        private async Task UpdateScanProgressAsync(List<int> scanIds)
+        {
+            await _context.GmailScans
+                .Where(s => scanIds.Contains(s.GmailScanId))
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Processed, x => _context.InboundDocuments.Count(d =>
+                    d.GmailScanId == x.GmailScanId
+                    && (d.Status == InboundDocumentStatus.Done || d.Status == InboundDocumentStatus.Failed))));
         }
 
         // O que ficou preso em Processing volta a Pending; sem tentativas sobrando, termina como Failed
         public async Task<int> RequeueStuckDocumentsAsync(DateTime startedBefore, int maxAttempts)
         {
+            var failingScanIds = await _context.InboundDocuments
+                .Where(d => d.Status == InboundDocumentStatus.Processing
+                    && d.ProcessingStartedAt < startedBefore
+                    && d.Attempts >= maxAttempts
+                    && d.GmailScanId != null)
+                .Select(d => d.GmailScanId!.Value)
+                .Distinct()
+                .ToListAsync();
+
             await _context.InboundDocuments
                 .Where(d => d.Status == InboundDocumentStatus.Processing
                     && d.ProcessingStartedAt < startedBefore
@@ -262,6 +309,9 @@ namespace FamilyVaultApi.Repositories.Repository
                     .SetProperty(d => d.Status, InboundDocumentStatus.Failed)
                     .SetProperty(d => d.FailureReason, "Não foi possível processar o documento.")
                     .SetProperty(d => d.TemporaryContent, (byte[]?)null));
+
+            if (failingScanIds.Count > 0)
+                await UpdateScanProgressAsync(failingScanIds);
 
             return await _context.InboundDocuments
                 .Where(d => d.Status == InboundDocumentStatus.Processing && d.ProcessingStartedAt < startedBefore)

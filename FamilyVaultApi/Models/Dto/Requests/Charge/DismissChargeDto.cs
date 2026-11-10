@@ -2,7 +2,8 @@ namespace FamilyVaultApi.Models.Dto.Requests.Charge
 {
     public class DismissChargeDto
     {
-        // Ignorado até a leitura de e-mail existir (o upload não tem remetente)
+        // Conta vinda do Gmail: o remetente entra em gmail_ignored_senders e sai das próximas buscas.
+        // Sem efeito no upload, que não tem remetente.
         public bool IgnoreSender { get; set; }
     }
 }

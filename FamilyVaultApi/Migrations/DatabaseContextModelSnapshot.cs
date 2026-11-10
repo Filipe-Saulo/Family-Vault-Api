@@ -285,6 +285,209 @@ namespace FamilyVaultApi.Migrations
                     b.ToTable("charges", (string)null);
                 });
 
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.GmailConnection", b =>
+                {
+                    b.Property<int>("GmailConnectionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("gmail_connection_id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("GmailConnectionId"));
+
+                    b.Property<DateTime>("ConnectedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("connected_at");
+
+                    b.Property<string>("GoogleEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("varchar(320)")
+                        .HasColumnName("google_email");
+
+                    b.Property<DateTime?>("InitialScanCompletedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("initial_scan_completed_at");
+
+                    b.Property<DateTime?>("LastScanRequestedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("last_scan_requested_at");
+
+                    b.Property<string>("RefreshTokenEncrypted")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("varchar(1024)")
+                        .HasColumnName("refresh_token_encrypted");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("SyncedUntil")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("synced_until");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("varchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("GmailConnectionId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("idx_gmail_connections_user");
+
+                    b.ToTable("gmail_connections", (string)null);
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.GmailIgnoredSender", b =>
+                {
+                    b.Property<int>("GmailIgnoredSenderId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("gmail_ignored_sender_id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("GmailIgnoredSenderId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Sender")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("varchar(254)")
+                        .HasColumnName("sender");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("varchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("GmailIgnoredSenderId");
+
+                    b.HasIndex("UserId", "Sender")
+                        .IsUnique()
+                        .HasDatabaseName("idx_gmail_ignored_senders_user_sender");
+
+                    b.ToTable("gmail_ignored_senders", (string)null);
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.GmailOAuthState", b =>
+                {
+                    b.Property<int>("GmailOAuthStateId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("gmail_oauth_state_id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("GmailOAuthStateId"));
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("ReturnUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("return_url");
+
+                    b.Property<string>("StateHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("state_hash");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("varchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("GmailOAuthStateId");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("idx_gmail_oauth_states_expires");
+
+                    b.HasIndex("StateHash")
+                        .IsUnique()
+                        .HasDatabaseName("idx_gmail_oauth_states_hash");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("gmail_oauth_states", (string)null);
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.GmailScan", b =>
+                {
+                    b.Property<int>("GmailScanId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("gmail_scan_id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("GmailScanId"));
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("Found")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("found");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<int>("Processed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("processed");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("varchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("WindowEnd")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("window_end");
+
+                    b.Property<DateTime>("WindowStart")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("window_start");
+
+                    b.HasKey("GmailScanId");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("idx_gmail_scans_status_created");
+
+                    b.HasIndex("UserId", "Status")
+                        .HasDatabaseName("idx_gmail_scans_user_status");
+
+                    b.ToTable("gmail_scans", (string)null);
+                });
+
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.InboundDocument", b =>
                 {
                     b.Property<int>("InboundDocumentId")
@@ -322,6 +525,10 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("varchar(300)")
                         .HasColumnName("failure_reason");
 
+                    b.Property<int?>("GmailScanId")
+                        .HasColumnType("int")
+                        .HasColumnName("gmail_scan_id");
+
                     b.Property<DateTime?>("ProcessingStartedAt")
                         .HasColumnType("datetime(6)")
                         .HasColumnName("processing_started_at");
@@ -358,6 +565,8 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnName("user_id");
 
                     b.HasKey("InboundDocumentId");
+
+                    b.HasIndex("GmailScanId");
 
                     b.HasIndex("Status", "CreatedAt")
                         .HasDatabaseName("idx_inbound_documents_status_created");
@@ -1001,14 +1210,70 @@ namespace FamilyVaultApi.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("FamilyVaultApi.Data.Entities.InboundDocument", b =>
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.GmailConnection", b =>
                 {
                     b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
+                        .HasConstraintName("fk_gmail_connections_user");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.GmailIgnoredSender", b =>
+                {
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_gmail_ignored_senders_user");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.GmailOAuthState", b =>
+                {
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_gmail_oauth_states_user");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.GmailScan", b =>
+                {
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_gmail_scans_user");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.InboundDocument", b =>
+                {
+                    b.HasOne("FamilyVaultApi.Data.Entities.GmailScan", "GmailScan")
+                        .WithMany()
+                        .HasForeignKey("GmailScanId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_inbound_documents_gmail_scan");
+
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
                         .HasConstraintName("fk_inbound_documents_user");
+
+                    b.Navigation("GmailScan");
 
                     b.Navigation("User");
                 });

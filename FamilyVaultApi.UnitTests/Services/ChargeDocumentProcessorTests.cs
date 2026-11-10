@@ -157,14 +157,14 @@ namespace FamilyVaultApi.UnitTests.Services
         }
 
         [Fact]
-        public async Task ProcessNextAsync_GmailDocument_ShouldReturnToPendingAndReturnFalse()
+        public async Task ProcessNextAsync_GmailDocumentWithoutGmailConfigured_ShouldReleaseAndReturnFalse()
         {
             SetupReservedDocument(Document(source: InboundDocumentSource.Gmail));
 
             var processed = await _processor.ProcessNextAsync(CancellationToken.None);
 
             processed.Should().BeFalse();
-            _repository.Verify(r => r.ReturnDocumentToPendingAsync(1), Times.Once);
+            _repository.Verify(r => r.ReleaseDocumentAsync(1), Times.Once);
             _extractor.Verify(e => e.ExtractAsync(It.IsAny<ChargeExtractionInput>(), It.IsAny<CancellationToken>()), Times.Never);
             _repository.Verify(r => r.CompleteDocumentAsync(It.IsAny<int>(), It.IsAny<InboundDocumentStatus>(), It.IsAny<string?>(), It.IsAny<Charge?>()), Times.Never);
         }

@@ -34,6 +34,7 @@ namespace FamilyVaultApi.UnitTests.Services
         private const string UserId = "user-1";
 
         private readonly Mock<IChargeRepository> _repository = new();
+        private readonly Mock<IGmailRepository> _gmailRepository = new();
         private readonly Mock<ITransactionService> _transactionService = new();
         private readonly ChargeProcessingOptions _options = new();
         private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 11, 10, 23, 59, 0, TimeSpan.Zero));
@@ -42,7 +43,7 @@ namespace FamilyVaultApi.UnitTests.Services
         public ChargeServiceTests()
         {
             _options.DailyLimits.PerUser = 3;
-            _service = new ChargeService(_repository.Object, _transactionService.Object, Options.Create(_options), _time);
+            _service = new ChargeService(_repository.Object, _gmailRepository.Object, _transactionService.Object, Options.Create(_options), _time);
 
             _repository.Setup(r => r.ExecuteInTransactionAsync(It.IsAny<Func<Task>>()))
                 .Returns((Func<Task> action) => action());
@@ -382,6 +383,42 @@ namespace FamilyVaultApi.UnitTests.Services
         }
 
         [Fact]
+        public async Task DismissAsync_GmailChargeWithIgnoreSender_ShouldIgnoreTheSender()
+        {
+            _repository.Setup(r => r.GetOwnerUserIdAsync(9)).ReturnsAsync(UserId);
+            _repository.Setup(r => r.TryDismissAsync(9)).ReturnsAsync(true);
+            _repository.Setup(r => r.GetDocumentSenderAsync(9)).ReturnsAsync((InboundDocumentSource.Gmail, "cobranca@loja.test"));
+
+            await _service.DismissAsync(9, new DismissChargeDto { IgnoreSender = true }, ClaimsPrincipalTestHelper.CreateUser(UserId));
+
+            _gmailRepository.Verify(r => r.AddIgnoredSenderAsync(UserId, "cobranca@loja.test", _time.Now.UtcDateTime), Times.Once);
+        }
+
+        [Fact]
+        public async Task DismissAsync_UploadChargeWithIgnoreSender_ShouldNotIgnoreAnything()
+        {
+            _repository.Setup(r => r.GetOwnerUserIdAsync(9)).ReturnsAsync(UserId);
+            _repository.Setup(r => r.TryDismissAsync(9)).ReturnsAsync(true);
+            _repository.Setup(r => r.GetDocumentSenderAsync(9)).ReturnsAsync((InboundDocumentSource.Upload, (string?)null));
+
+            await _service.DismissAsync(9, new DismissChargeDto { IgnoreSender = true }, ClaimsPrincipalTestHelper.CreateUser(UserId));
+
+            _gmailRepository.Verify(r => r.AddIgnoredSenderAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task DismissAsync_GmailChargeWithoutIgnoreSender_ShouldNotIgnoreTheSender()
+        {
+            _repository.Setup(r => r.GetOwnerUserIdAsync(9)).ReturnsAsync(UserId);
+            _repository.Setup(r => r.TryDismissAsync(9)).ReturnsAsync(true);
+            _repository.Setup(r => r.GetDocumentSenderAsync(9)).ReturnsAsync((InboundDocumentSource.Gmail, "cobranca@loja.test"));
+
+            await _service.DismissAsync(9, new DismissChargeDto { IgnoreSender = false }, ClaimsPrincipalTestHelper.CreateUser(UserId));
+
+            _gmailRepository.Verify(r => r.AddIgnoredSenderAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()), Times.Never);
+        }
+
+        [Fact]
         public async Task DismissAsync_TryDismissReturnsFalse_ShouldThrowConflict()
         {
             _repository.Setup(r => r.GetOwnerUserIdAsync(9)).ReturnsAsync(UserId);
@@ -390,6 +427,7 @@ namespace FamilyVaultApi.UnitTests.Services
             Func<Task> act = () => _service.DismissAsync(9, new DismissChargeDto { IgnoreSender = true }, ClaimsPrincipalTestHelper.CreateUser(UserId));
 
             await act.Should().ThrowAsync<ConflictException>();
+            _gmailRepository.Verify(r => r.AddIgnoredSenderAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()), Times.Never);
         }
 
         [Fact]

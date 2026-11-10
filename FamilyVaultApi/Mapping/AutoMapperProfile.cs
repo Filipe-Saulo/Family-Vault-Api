@@ -2,6 +2,7 @@
 using FamilyVaultApi.Data.Entities;
 using FamilyVaultApi.Models.Dto.Requests.Category;
 using FamilyVaultApi.Models.Dto.Responses.Charge;
+using FamilyVaultApi.Models.Dto.Responses.Gmail;
 using FamilyVaultApi.Models.Dto.Requests.CategoryPurpose;
 using FamilyVaultApi.Models.Dto.Requests.Transaction;
 using FamilyVaultApi.Models.Dto.Requests.TransactionType;
@@ -79,6 +80,17 @@ namespace FamilyVaultApi.Mapping
             CreateMap<InboundDocument, ChargeFailureResponseDto>()
                 .ForMember(d => d.DocumentId, opt => opt.MapFrom(src => src.InboundDocumentId))
                 .ForMember(d => d.Source, opt => opt.MapFrom(src => src.Source.ToString()));
+
+            CreateMap<GmailConnection, GmailStatusResponseDto>()
+                .ForMember(d => d.Connected, opt => opt.MapFrom(src => src.Status == GmailConnectionStatus.Active))
+                .ForMember(d => d.Status, opt => opt.MapFrom(src => src.Status.ToString()));
+
+            CreateMap<GmailScan, GmailScanResponseDto>()
+                .ForMember(d => d.Kind, opt => opt.MapFrom(src => src.Kind.ToString()))
+                .ForMember(d => d.Status, opt => opt.MapFrom(src => src.Status.ToString()));
+
+            CreateMap<GmailIgnoredSender, GmailIgnoredSenderResponseDto>()
+                .ForMember(d => d.Id, opt => opt.MapFrom(src => src.GmailIgnoredSenderId));
 
             CreateMap<CreateTransactionTypeDto, TransactionType>()
                 .ForMember(d => d.Code, opt => opt.Ignore())

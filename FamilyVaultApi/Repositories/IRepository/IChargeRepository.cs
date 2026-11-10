@@ -17,6 +17,7 @@ namespace FamilyVaultApi.Repositories.IRepository
 
         // Consulta
         Task<string?> GetOwnerUserIdAsync(int chargeId);
+        Task<(InboundDocumentSource Source, string? Sender)?> GetDocumentSenderAsync(int chargeId);
         Task<ChargeResponseDto?> GetResponseByIdAsync(int chargeId);
         Task<PagedResult<ChargeResponseDto>> GetAllAsync(string userId, ChargeQueryRequestDto query);
         Task<PagedResult<ChargeFailureResponseDto>> GetFailuresAsync(string userId, PagedFilterDto query);
@@ -32,6 +33,7 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<bool> TryReserveDocumentAsync(int documentId, DateTime now);
         Task<InboundDocument?> GetDocumentAsync(int documentId);
         Task ReturnDocumentToPendingAsync(int documentId);
+        Task ReleaseDocumentAsync(int documentId);
         Task CompleteDocumentAsync(int documentId, InboundDocumentStatus status, string? failureReason, Charge? charge);
         Task<int> RequeueStuckDocumentsAsync(DateTime startedBefore, int maxAttempts);
         Task<List<ChargeCategoryOption>> GetExpenseCategoriesAsync(string userId);
