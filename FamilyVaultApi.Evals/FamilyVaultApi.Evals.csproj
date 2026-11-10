@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Evals do extrator real: chamam a IA de verdade e custam dinheiro. Rodam à mão (dotnet run ou o workflow
+       manual "Evals"), nunca na suíte normal: não é projeto de teste, então o dotnet test não o executa. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <UserSecretsId>family-vault-api</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FamilyVaultApi\FamilyVaultApi.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Dataset\cases.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Dataset\files\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

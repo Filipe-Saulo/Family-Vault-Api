@@ -347,3 +347,6 @@ healthchecksdb
 
 # Cobertura gerada pelo CI/local (coverage.runsettings)
 coverage/
+
+# Relatórios dos evals (FamilyVaultApi.Evals)
+eval-reports/

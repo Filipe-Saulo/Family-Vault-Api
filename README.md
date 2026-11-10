@@ -90,6 +90,15 @@ dotnet user-secrets set "AdminSeed:Password" "ChangeMe123"
 Public sign-up (`POST /api/register`) only creates regular users, by phone or e-mail confirmed with a code; further Administrators are created by an
 Administrator through `POST /api/User`.
 
+   Optional: to read uploaded bills with the AI (Claude), set the Anthropic key the same way. Without it the API
+   still accepts uploads, but the documents stay `Pending`. The model is `Ai:Model` in `appsettings.json`, chosen by
+   the evals in `FamilyVaultApi.Evals` (see its README):
+
+```bash
+cd FamilyVaultApi
+dotnet user-secrets set "Ai:ApiKey" "<anthropic key>"
+```
+
 4. Apply database migrations:
 
 ```bash
