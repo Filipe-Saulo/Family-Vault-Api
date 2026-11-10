@@ -1,0 +1,52 @@
+name: Evals
+
+# Evals do extrator de contas com a IA de verdade. Custa dinheiro a cada rodada, então só roda à mão
+# (Actions > Evals > Run workflow), nunca em push ou PR. Precisa do secret ANTHROPIC_API_KEY no repositório.
+# O relatório de cada modelo fica nos artefatos do job, e a tabela de comparação, no resumo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: Modelos, separados por vírgula
+        default: claude-haiku-5-5,claude-sonnet-5-5,claude-opus-5-5
+        required: true
+      effort:
+        description: Esforço (low, medium, high, xhigh, max); vazio usa o padrão de cada modelo
+        default: ''
+        required: false
+      repeat:
+        description: Repetições de cada caso
+        default: '1'
+        required: true
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run evals
+        env:
+          Ai__ApiKey: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODELS: ${{ inputs.models }}
+          EFFORT: ${{ inputs.effort }}
+          REPEAT: ${{ inputs.repeat }}
+        run: |
+          dotnet run --project FamilyVaultApi.Evals --configuration Release -- \
+            --run --models "$MODELS" --effort "$EFFORT" --repeat "$REPEAT" --out eval-reports
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-reports
+          path: eval-reports/

@@ -1,3 +1,4 @@
+using Anthropic;
 using AspNetCoreRateLimit;
 using FamilyVaultApi.Common;
 using FamilyVaultApi.Data;
@@ -187,8 +188,23 @@ builder.Services.AddScoped<ITransactionTypeRepository, TransactionTypeRepository
 builder.Services.Configure<ChargeProcessingOptions>(builder.Configuration.GetSection("Charges"));
 builder.Services.AddScoped<IChargeService, ChargeService>();
 builder.Services.AddScoped<IChargeRepository, ChargeRepository>();
-// Por fábrica: o IChargeExtractor só existe a partir do lote Evals, e a validação de DI do ambiente Development
-// recusaria o registro direto. O worker só resolve o processador quando há extrator registrado.
+// Extrator real só com a chave configurada (user-secrets ou Ai__ApiKey). Sem ela, nada é registrado e os documentos
+// ficam Pending, como antes.
+builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("Ai"));
+var aiOptions = builder.Configuration.GetSection("Ai").Get<AiOptions>() ?? new AiOptions();
+if (!string.IsNullOrWhiteSpace(aiOptions.ApiKey))
+{
+    AnthropicChargeExtractor.ValidateOptions(aiOptions);
+    builder.Services.AddSingleton<IAnthropicClient>(new AnthropicClient
+    {
+        ApiKey = aiOptions.ApiKey,
+        Timeout = TimeSpan.FromSeconds(aiOptions.TimeoutSeconds),
+        MaxRetries = aiOptions.MaxRetries
+    });
+    builder.Services.AddScoped<IChargeExtractor, AnthropicChargeExtractor>();
+}
+// Por fábrica: sem chave não há IChargeExtractor, e a validação de DI do ambiente Development recusaria o registro
+// direto. O worker só resolve o processador quando há extrator registrado.
 builder.Services.AddScoped(sp => ActivatorUtilities.CreateInstance<ChargeDocumentProcessor>(sp));
 builder.Services.AddHostedService<ChargeProcessingWorker>();
 //dashboard
