@@ -118,6 +118,9 @@ namespace FamilyVaultApi.Repositories.Repository
             var strategy = _context.Database.CreateExecutionStrategy();
             await strategy.ExecuteAsync(async () =>
             {
+                // Numa nova tentativa, descarta as entidades da tentativa desfeita pelo rollback (senão gravam de novo)
+                _context.ChangeTracker.Clear();
+
                 await using var transaction = await _context.Database.BeginTransactionAsync();
 
                 // Numa nova tentativa, descarta o ConcurrencyStamp da tentativa desfeita pelo rollback
@@ -172,6 +175,9 @@ namespace FamilyVaultApi.Repositories.Repository
             var strategy = _context.Database.CreateExecutionStrategy();
             await strategy.ExecuteAsync(async () =>
             {
+                // Numa nova tentativa, descarta as entidades da tentativa desfeita pelo rollback (senão gravam de novo)
+                _context.ChangeTracker.Clear();
+
                 await using var transaction = await _context.Database.BeginTransactionAsync();
 
                 await _context.Transactions.Where(t => t.UserId == userId).ExecuteDeleteAsync();

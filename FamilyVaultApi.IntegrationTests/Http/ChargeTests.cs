@@ -241,6 +241,34 @@ namespace FamilyVaultApi.IntegrationTests.Http
         }
 
         [Fact]
+        public async Task Confirm_WhenFirstSaveFailsTransiently_ShouldRetryAndKeepSingleTransaction()
+        {
+            // A nova tentativa da execution strategy não pode levar junto a despesa Added da tentativa que falhou
+            var interceptor = new FailFirstTransactionSaveInterceptor();
+            using var factory = new FamilyVaultApiFactory(ApiFixture.AdminEmail, ApiFixture.AdminPassword,
+                configureDatabase: options => options
+                    .UseSqlite(sqlite => sqlite.ExecutionStrategy(d => new RetryOnSimulatedFailureStrategy(d)))
+                    .AddInterceptors(interceptor));
+            var client = await LoginAdminAsync(factory);
+
+            var marker = NewMarker();
+            factory.ChargeExtractor.Returns(marker, Charge(marker, 150.25m, DueIn(12), BankLine(Seed()), ExpenseCategoryId));
+            var documentId = await UploadDocumentAsync(client, PdfBytes(marker));
+            using (var scope = factory.Services.CreateScope())
+                await scope.ServiceProvider.GetRequiredService<ChargeDocumentProcessor>().ProcessNextAsync(CancellationToken.None);
+            var charge = (await ListAsync(client)).Single(c => c.DocumentId == documentId);
+
+            var confirm = await client.PostAsJsonAsync($"/api/charge/{charge.ChargeId}/confirm", ConfirmBody(DueIn(10)));
+
+            confirm.StatusCode.Should().Be(HttpStatusCode.Created);
+            interceptor.Failures.Should().Be(1);
+            var created = (await confirm.ReadEnvelopeAsync<TransactionData>()).Data!;
+            (await ListTransactionsAsync(client)).Should().ContainSingle()
+                .Which.TransactionId.Should().Be(created.TransactionId);
+            (await GetChargeAsync(client, charge.ChargeId)).TransactionId.Should().Be(created.TransactionId);
+        }
+
+        [Fact]
         public async Task Confirm_AfterDismiss_ShouldReturnConflict()
         {
             var (_, user) = await _api.UserClientAsync(0);

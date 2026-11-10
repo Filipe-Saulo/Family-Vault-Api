@@ -27,6 +27,7 @@ namespace FamilyVaultApi.IntegrationTests
         private readonly string? _adminEmail;
         private readonly string? _adminPassword;
         private readonly IDictionary<string, string?>? _settings;
+        private readonly Action<DbContextOptionsBuilder>? _configureDatabase;
 
         // Extrator falso das contas por upload: o teste configura o resultado por marcador nos bytes
         public FakeChargeExtractor ChargeExtractor { get; } = new();
@@ -35,9 +36,10 @@ namespace FamilyVaultApi.IntegrationTests
         public FakeGmailApiClient GmailClient { get; } = new();
 
         public FamilyVaultApiFactory(string? adminEmail, string? adminPassword, Action<DatabaseContext>? seedBeforeStartup = null,
-            IDictionary<string, string?>? settings = null)
+            IDictionary<string, string?>? settings = null, Action<DbContextOptionsBuilder>? configureDatabase = null)
         {
             _settings = settings;
+            _configureDatabase = configureDatabase;
             _adminEmail = adminEmail;
             _adminPassword = adminPassword;
 
@@ -76,7 +78,12 @@ namespace FamilyVaultApi.IntegrationTests
 
             builder.ConfigureServices(services =>
             {
-                services.AddDbContext<DatabaseContext>(options => options.UseSqlite(_connection));
+                // configureDatabase: ajuste do teste por cima do SQLite (ex.: execution strategy e interceptor de falha)
+                services.AddDbContext<DatabaseContext>(options =>
+                {
+                    options.UseSqlite(_connection);
+                    _configureDatabase?.Invoke(options);
+                });
                 services.RemoveAll<IChargeExtractor>();
                 services.AddSingleton<IChargeExtractor>(ChargeExtractor);
                 services.RemoveAll<IGmailApiClient>();
