@@ -20,6 +20,7 @@ flowchart LR
 - Categories are **global or personal**; changing or deleting one in use answers **409**
 - Standard error **envelope** (`ApiResponse<T>` with `traceId`), also for 401, 403 and 429
 - **Rate limiting** on auth endpoints
+- Read-only **MCP server** at `/mcp`: an AI client (Claude Code, MCP Inspector) queries your own finances with a personal token that only works there
 - **277 unit tests** on the Service layer and **integration tests** (WebApplicationFactory + in-memory SQLite) through the real HTTP pipeline, run by CI on every push, with **73.1% line coverage**
 
 ---
@@ -193,6 +194,35 @@ dotnet run --project FamilyVaultApi
 | Method | Endpoint | Roles |
 |---|---|---|
 | GET | `/api/dashboard/summary` | Administrator, User (scoped to own data for `User`); `startDate`/`endDate` as `YYYY-MM-DD`, current month by default |
+
+### MCP tokens
+
+| Method | Endpoint | Roles |
+|---|---|---|
+| GET | `/api/user/me/mcp-tokens` | Administrator, User — the caller's tokens that were not revoked (expired ones included, with `isExpired`); never the value |
+| POST | `/api/user/me/mcp-tokens` | Administrator, User — `{name, expiresInDays?}` (30, 90 or 365; default 90); 201 with `token` (`fv_pat_...`), shown only this once; 409 above 5 active tokens |
+| DELETE | `/api/user/me/mcp-tokens/{id}` | Administrator, User — owner only (404 otherwise), 204 |
+
+### MCP server (`/mcp`)
+
+Streamable HTTP, stateless, authenticated **only** by a personal token (`Authorization: Bearer fv_pat_...`); the JWT is refused there, and the personal token is refused everywhere else. Tools are read-only and always return the token owner's data, even for an Administrator:
+
+| Tool | Arguments |
+|---|---|
+| `get_financial_summary` | `startDate`, `endDate` (`YYYY-MM-DD`) |
+| `search_transactions` | `startDate`, `endDate`, `categoryId?`, `description?`, `page?` (20 per page) |
+| `list_categories` | — |
+| `list_pending_charges` | — (issuer and description are trimmed: they come from third-party documents) |
+
+60 requests per minute per token (`Mcp:CallsPerMinute`, 429 above it). Each tool call is logged with tool, user, token and duration.
+
+#### Demo
+
+1. Run the API (`dotnet run --project FamilyVaultApi`) and log in (`POST /api/app/login` in Swagger).
+2. `POST /api/user/me/mcp-tokens` with `{"name": "Claude Code"}` and copy `data.token`.
+3. **Claude Code**: `claude mcp add --transport http family-vault http://localhost:5090/mcp --header "Authorization: Bearer fv_pat_..."`, then ask, e.g., "How much did I spend last month by category?".
+4. **MCP Inspector** (alternative): `npx @modelcontextprotocol/inspector`, transport *Streamable HTTP*, URL `http://localhost:5090/mcp`, header `Authorization: Bearer fv_pat_...`, then *List Tools* and run `get_financial_summary`.
+5. Revoke with `DELETE /api/user/me/mcp-tokens/{id}`: the next call answers 401.
 
 ### Health
 

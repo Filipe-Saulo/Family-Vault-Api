@@ -24,6 +24,7 @@ namespace FamilyVaultApi.Data
         public DbSet<GmailScan> GmailScans { get; set; }
         public DbSet<GmailIgnoredSender> GmailIgnoredSenders { get; set; }
         public DbSet<GmailOAuthState> GmailOAuthStates { get; set; }
+        public DbSet<PersonalAccessToken> PersonalAccessTokens { get; set; }
 
         public DatabaseContext(DbContextOptions options) : base(options)
         {
@@ -60,6 +61,7 @@ namespace FamilyVaultApi.Data
             modelBuilder.ApplyConfiguration(new GmailScanConfiguration());
             modelBuilder.ApplyConfiguration(new GmailIgnoredSenderConfiguration());
             modelBuilder.ApplyConfiguration(new GmailOAuthStateConfiguration());
+            modelBuilder.ApplyConfiguration(new PersonalAccessTokenConfiguration());
 
             SeedData(modelBuilder);           
 

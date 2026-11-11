@@ -578,6 +578,67 @@ namespace FamilyVaultApi.Migrations
                     b.ToTable("inbound_documents", (string)null);
                 });
 
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.PersonalAccessToken", b =>
+                {
+                    b.Property<int>("PersonalAccessTokenId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("personal_access_token_id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("PersonalAccessTokenId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("PersonalAccessTokenId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("uq_personal_access_tokens_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("idx_personal_access_tokens_user");
+
+                    b.ToTable("personal_access_tokens", (string)null);
+                });
+
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.RefreshToken", b =>
                 {
                     b.Property<long>("RefreshTokenId")
@@ -1274,6 +1335,18 @@ namespace FamilyVaultApi.Migrations
                         .HasConstraintName("fk_inbound_documents_user");
 
                     b.Navigation("GmailScan");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.PersonalAccessToken", b =>
+                {
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_personal_access_tokens_user");
 
                     b.Navigation("User");
                 });
