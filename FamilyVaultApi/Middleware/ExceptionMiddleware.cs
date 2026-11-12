@@ -72,6 +72,11 @@ namespace FamilyVaultApi.Middleware
                 _logger.LogWarning(ex, "Limite excedido. TraceId={TraceId}", traceId);
                 await HandleExceptionAsync(context, HttpStatusCode.TooManyRequests, ex.Message, traceId);
             }
+            catch (ServiceUnavailableException ex)
+            {
+                _logger.LogWarning(ex, "Recurso indisponível. TraceId={TraceId}", traceId);
+                await HandleExceptionAsync(context, HttpStatusCode.ServiceUnavailable, ex.Message, traceId);
+            }
             catch (BadHttpRequestException ex)
             {
                 // Corpo acima do limite (413) ou malformado, detectado pelo servidor ao ler o request

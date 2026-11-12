@@ -71,6 +71,16 @@ namespace FamilyVaultApi.Controllers
             return Ok(ApiResponse<AuthResponseDto>.Ok(authResponse, "Login realizado com sucesso."));
         }
 
+        [HttpPost("app/google")]
+        public async Task<ActionResult<ApiResponse<AuthResponseDto>>> LoginAppWithGoogle([FromBody] GoogleLoginRequestDto? dto)
+        {
+            if (dto == null)
+                return BadRequest(ApiResponse<AuthResponseDto>.BadRequest(StandardMessages.NullBody));
+
+            var authResponse = await _accountService.LoginWithGoogleAsync(dto);
+            return Ok(ApiResponse<AuthResponseDto>.Ok(authResponse, "Login realizado com sucesso."));
+        }
+
         [HttpPost("logout")]
         public async Task<IActionResult> Logout([FromBody] LogoutRequestDto? request = null)
         {

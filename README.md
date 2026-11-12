@@ -100,6 +100,16 @@ cd FamilyVaultApi
 dotnet user-secrets set "Ai:ApiKey" "<anthropic key>"
 ```
 
+   Optional: Google sign-in for the app (`POST /api/app/google`) accepts ID tokens whose `aud` is one of the OAuth
+   client IDs below (the web client ID, which the native SDK uses as audience, and the iOS one). Without them the
+   route answers 503. Env vars elsewhere: `GoogleSignIn__ClientIds__0`, `GoogleSignIn__ClientIds__1`.
+
+```bash
+cd FamilyVaultApi
+dotnet user-secrets set "GoogleSignIn:ClientIds:0" "<web client id>.apps.googleusercontent.com"
+dotnet user-secrets set "GoogleSignIn:ClientIds:1" "<ios client id>.apps.googleusercontent.com"
+```
+
 4. Apply database migrations:
 
 ```bash
@@ -127,6 +137,7 @@ dotnet run --project FamilyVaultApi
 | POST | `/api/register` | Public sign-up of a regular User; body has `code` plus `phoneNumber` or `email` (exactly one) and the profile fields; the destination becomes the login and is confirmed; bad code -> 400; 201 on success |
 | POST | `/api/web/login` | Authenticate; refresh token set as an HttpOnly, `SameSite=Lax`, `Path=/api` cookie (the web panel calls the API through its own origin via a proxy) |
 | POST | `/api/app/login` | Authenticate; refresh token returned in the response body |
+| POST | `/api/app/google` | Anonymous, app only; body `{idToken}` (Google ID token from the native SDK). Creates a User without password or links the account with the same verified e-mail; Administrators get 403; invalid token 401; not configured 503. Same response as `/api/app/login` |
 | POST | `/api/logout` | Anonymous; ends only the session of the given refresh token (body `{refreshToken}` or the web cookie) and clears the cookie; always 200, even with a missing or unknown token |
 | POST | `/api/web/refreshtoken` | Refresh access token; reads/writes the refresh token via cookie |
 | POST | `/api/app/refreshtoken` | Refresh access token; reads/writes the refresh token via request/response body |

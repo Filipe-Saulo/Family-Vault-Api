@@ -10,6 +10,8 @@ namespace FamilyVaultApi.Services.IService
         Task SendRegistrationCodeAsync(RegistrationCodeRequestDto dto);
         Task<IEnumerable<IdentityError>> RegisterAsync(RegisterAccountRequestDto dto);
         Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto, AuthClient client);
+        // Login com Google, só no app: valida o ID token e cria ou vincula a conta User
+        Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginRequestDto dto);
         Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request, AuthClient client);
         Task LogoutAsync(string? refreshToken);
     }
