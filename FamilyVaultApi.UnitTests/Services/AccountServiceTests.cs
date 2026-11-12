@@ -28,6 +28,7 @@ namespace FamilyVaultApi.UnitTests.Services
         private readonly Mock<IRegistrationCodeStore> _registrationCodeStoreMock = new();
         private readonly Mock<IVerificationSendLimiter> _sendLimiterMock = new();
         private readonly Mock<IVerificationCodeSender> _codeSenderMock = new();
+        private readonly Mock<IGoogleIdTokenValidator> _googleValidatorMock = new();
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
 
         public AccountServiceTests()
@@ -47,6 +48,8 @@ namespace FamilyVaultApi.UnitTests.Services
             _repositoryMock.Setup(x => x.PhoneExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
             _tokenServiceMock.Setup(x => x.GenerateAccessToken(It.IsAny<TokenClaimsData>())).Returns("fake-jwt-token");
             _sendLimiterMock.Setup(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), It.IsAny<string>())).ReturnsAsync(true);
+            _identityServiceMock.Setup(x => x.HasPasswordAsync(It.IsAny<User>())).ReturnsAsync(true);
+            _googleValidatorMock.Setup(x => x.IsConfigured).Returns(true);
 
             string defaultFormatted = "+5511987654312";
             _phoneNumberServiceMock
@@ -55,7 +58,7 @@ namespace FamilyVaultApi.UnitTests.Services
         }
 
         private AccountService CreateService() => new(_repositoryMock.Object, _identityServiceMock.Object, _tokenServiceMock.Object, _phoneNumberServiceMock.Object, _refreshTokenServiceMock.Object,
-            _registrationCodeStoreMock.Object, _sendLimiterMock.Object, _codeSenderMock.Object);
+            _registrationCodeStoreMock.Object, _sendLimiterMock.Object, _codeSenderMock.Object, _googleValidatorMock.Object);
 
         private static User CreateUserEntity(string id = "user-1", string? email = null, string? phoneNumber = null) => new()
         {
@@ -512,6 +515,222 @@ namespace FamilyVaultApi.UnitTests.Services
             await CreateService().LoginAsync(dto, AuthClient.Web);
 
             _tokenServiceMock.Verify(x => x.GenerateAccessToken(It.Is<TokenClaimsData>(d => d.Identifier == "fulano@exemplo.com" && d.IsUser && !d.IsAdmin)), Times.Once);
+        }
+
+        [Fact]
+        public async Task LoginAsync_WhenAccountHasNoPassword_ShouldThrowGenericUnauthorizedWithoutCountingLockout()
+        {
+            var dto = LoginRequestBuilder.New().WithPhone(null).Build();
+            var user = CreateUserEntity(email: dto.Email);
+            _identityServiceMock.Setup(x => x.FindUserByLoginAsync(dto)).ReturnsAsync(user);
+            _identityServiceMock.Setup(x => x.HasPasswordAsync(user)).ReturnsAsync(false);
+
+            Func<Task> act = () => CreateService().LoginAsync(dto, AuthClient.App);
+
+            (await act.Should().ThrowAsync<UnauthorizedAccessException>()).Which.Message.Should().Be("Usuário ou senha inválidos.");
+            _identityServiceMock.Verify(x => x.AccessFailedAsync(It.IsAny<User>()), Times.Never);
+            _identityServiceMock.Verify(x => x.CheckPasswordAsync(It.IsAny<User>(), It.IsAny<string>()), Times.Never);
+        }
+
+        // ── LoginWithGoogleAsync ─────────────────────────────────────────────
+
+        private const string GoogleSub = "google-sub-1";
+        private const string GoogleEmail = "fulana@gmail.com";
+
+        private static GoogleIdentity Google(string? email = GoogleEmail, bool verified = true, string? given = "Fulana", string? family = "de Tal", string? name = "Fulana de Tal") =>
+            new(GoogleSub, email, verified, given, family, name);
+
+        private void SetUpGoogleToken(GoogleIdentity? identity) =>
+            _googleValidatorMock.Setup(x => x.ValidateAsync("id-token")).ReturnsAsync(identity);
+
+        private void SetUpRoles(User user, bool isAdmin, bool isUser)
+        {
+            _identityServiceMock.Setup(x => x.GetRolesAsync(user)).ReturnsAsync((isAdmin, isUser));
+            _identityServiceMock.Setup(x => x.GetUserClaimsAsync(user)).ReturnsAsync(new List<Claim>());
+            _identityServiceMock.Setup(x => x.GetRoleClaimsAsync(It.IsAny<string>())).ReturnsAsync(new List<Claim>());
+        }
+
+        private Task<AuthResponseDto> GoogleLogin(string? idToken = "id-token") =>
+            CreateService().LoginWithGoogleAsync(new GoogleLoginRequestDto { IdToken = idToken });
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("  ")]
+        public async Task LoginWithGoogleAsync_WhenIdTokenIsMissing_ShouldThrowBadRequest(string? idToken)
+        {
+            Func<Task> act = () => GoogleLogin(idToken);
+
+            await act.Should().ThrowAsync<BadRequestException>();
+            _googleValidatorMock.Verify(x => x.ValidateAsync(It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task LoginWithGoogleAsync_WhenNotConfigured_ShouldThrowServiceUnavailable()
+        {
+            _googleValidatorMock.Setup(x => x.IsConfigured).Returns(false);
+
+            Func<Task> act = () => GoogleLogin();
+
+            (await act.Should().ThrowAsync<ServiceUnavailableException>()).Which.Message.Should().Be("Login com Google não configurado.");
+        }
+
+        [Fact]
+        public async Task LoginWithGoogleAsync_WhenTokenIsInvalid_ShouldThrowUnauthorized()
+        {
+            SetUpGoogleToken(null);
+
+            Func<Task> act = () => GoogleLogin();
+
+            (await act.Should().ThrowAsync<UnauthorizedAccessException>()).Which.Message.Should().Be("Login com Google inválido.");
+        }
+
+        [Theory]
+        [InlineData(GoogleEmail, false)]
+        [InlineData(null, true)]
+        [InlineData("sem-arroba", true)]
+        public async Task LoginWithGoogleAsync_WhenEmailIsMissingOrNotVerified_ShouldThrowUnauthorized(string? email, bool verified)
+        {
+            SetUpGoogleToken(Google(email: email, verified: verified));
+
+            Func<Task> act = () => GoogleLogin();
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            _identityServiceMock.Verify(x => x.RegisterExternalUserAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task LoginWithGoogleAsync_WhenAlreadyLinked_ShouldOpenAppSessionWithoutLinkingAgain()
+        {
+            SetUpGoogleToken(Google());
+            var user = CreateUserEntity(email: GoogleEmail);
+            _identityServiceMock.Setup(x => x.FindByExternalLoginAsync("Google", GoogleSub)).ReturnsAsync(user);
+            SetUpRoles(user, isAdmin: false, isUser: true);
+            _refreshTokenServiceMock.Setup(x => x.CreateSessionAsync("user-1", AuthClient.App)).ReturnsAsync("refresh-app");
+
+            var result = await GoogleLogin();
+
+            result.UserId.Should().Be("user-1");
+            result.Token.Should().Be("fake-jwt-token");
+            result.RefreshToken.Should().Be("refresh-app");
+            _identityServiceMock.Verify(x => x.LinkExternalLoginAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            _identityServiceMock.Verify(x => x.UpdateLastLoginAsync(user), Times.Once);
+        }
+
+        [Fact]
+        public async Task LoginWithGoogleAsync_WhenEmailHasAccount_ShouldLinkAutomatically()
+        {
+            SetUpGoogleToken(Google(email: "Fulana@Gmail.com"));
+            var user = CreateUserEntity(phoneNumber: E164);
+            _identityServiceMock.Setup(x => x.FindByEmailAsync(GoogleEmail)).ReturnsAsync(user);
+            SetUpRoles(user, isAdmin: false, isUser: true);
+
+            await GoogleLogin();
+
+            _identityServiceMock.Verify(x => x.LinkExternalLoginAsync(user, "Google", GoogleSub), Times.Once);
+            _identityServiceMock.Verify(x => x.RegisterExternalUserAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task LoginWithGoogleAsync_WhenEmailBelongsToAdministrator_ShouldThrowForbiddenWithoutLinking()
+        {
+            SetUpGoogleToken(Google());
+            var admin = CreateUserEntity(email: GoogleEmail);
+            _identityServiceMock.Setup(x => x.FindByEmailAsync(GoogleEmail)).ReturnsAsync(admin);
+            SetUpRoles(admin, isAdmin: true, isUser: false);
+
+            Func<Task> act = () => GoogleLogin();
+
+            (await act.Should().ThrowAsync<SecurityException>()).Which.Message.Should().Be("Administrador entra com e-mail e senha.");
+            _identityServiceMock.Verify(x => x.LinkExternalLoginAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            _refreshTokenServiceMock.Verify(x => x.CreateSessionAsync(It.IsAny<string>(), It.IsAny<AuthClient>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task LoginWithGoogleAsync_WhenLinkedAccountBecameAdministrator_ShouldThrowForbidden()
+        {
+            SetUpGoogleToken(Google());
+            var user = CreateUserEntity(email: GoogleEmail);
+            _identityServiceMock.Setup(x => x.FindByExternalLoginAsync("Google", GoogleSub)).ReturnsAsync(user);
+            SetUpRoles(user, isAdmin: true, isUser: false);
+
+            Func<Task> act = () => GoogleLogin();
+
+            await act.Should().ThrowAsync<SecurityException>();
+        }
+
+        [Fact]
+        public async Task LoginWithGoogleAsync_WhenNoAccount_ShouldCreateUserWithGoogleNames()
+        {
+            SetUpGoogleToken(Google());
+            var created = CreateUserEntity(id: "novo", email: GoogleEmail);
+            _identityServiceMock.Setup(x => x.RegisterExternalUserAsync(GoogleEmail, "Fulana", "de Tal", "Google", GoogleSub)).ReturnsAsync(created);
+            SetUpRoles(created, isAdmin: false, isUser: true);
+
+            var result = await GoogleLogin();
+
+            result.UserId.Should().Be("novo");
+            _refreshTokenServiceMock.Verify(x => x.CreateSessionAsync("novo", AuthClient.App), Times.Once);
+        }
+
+        [Theory]
+        [InlineData(null, null, "Maria Clara Souza", "Maria", "Clara Souza")]
+        [InlineData(null, null, null, "fulana", "")]
+        [InlineData("Ana", null, "Ana", "Ana", "")]
+        public async Task LoginWithGoogleAsync_WhenNamesAreMissing_ShouldFallBackToNameAndEmail(string? given, string? family, string? name, string expectedFirst, string expectedLast)
+        {
+            SetUpGoogleToken(Google(given: given, family: family, name: name));
+            var created = CreateUserEntity(id: "novo", email: GoogleEmail);
+            _identityServiceMock.Setup(x => x.RegisterExternalUserAsync(GoogleEmail, expectedFirst, expectedLast, "Google", GoogleSub)).ReturnsAsync(created);
+            SetUpRoles(created, isAdmin: false, isUser: true);
+
+            var result = await GoogleLogin();
+
+            result.UserId.Should().Be("novo");
+        }
+
+        [Fact]
+        public async Task LoginWithGoogleAsync_WhenNamesAreLong_ShouldTruncateTo30And70()
+        {
+            SetUpGoogleToken(Google(given: new string('a', 40), family: new string('b', 90)));
+            var created = CreateUserEntity(id: "novo", email: GoogleEmail);
+            _identityServiceMock.Setup(x => x.RegisterExternalUserAsync(GoogleEmail, new string('a', 30), new string('b', 70), "Google", GoogleSub)).ReturnsAsync(created);
+            SetUpRoles(created, isAdmin: false, isUser: true);
+
+            var result = await GoogleLogin();
+
+            result.UserId.Should().Be("novo");
+        }
+
+        [Fact]
+        public async Task LoginWithGoogleAsync_WhenConcurrentFirstLoginCreatedAccount_ShouldUseIt()
+        {
+            SetUpGoogleToken(Google());
+            var other = CreateUserEntity(id: "do-outro-request", email: GoogleEmail);
+            _identityServiceMock.SetupSequence(x => x.FindByExternalLoginAsync("Google", GoogleSub))
+                .ReturnsAsync((User?)null)
+                .ReturnsAsync(other);
+            _identityServiceMock.Setup(x => x.RegisterExternalUserAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+                .ThrowsAsync(new InvalidOperationException("DuplicateUserName"));
+            SetUpRoles(other, isAdmin: false, isUser: true);
+
+            var result = await GoogleLogin();
+
+            result.UserId.Should().Be("do-outro-request");
+        }
+
+        [Fact]
+        public async Task LoginWithGoogleAsync_WhenAccountIsLockedOut_ShouldStillLogInWithoutResettingLockout()
+        {
+            SetUpGoogleToken(Google());
+            var user = CreateUserEntity(email: GoogleEmail);
+            _identityServiceMock.Setup(x => x.FindByExternalLoginAsync("Google", GoogleSub)).ReturnsAsync(user);
+            _identityServiceMock.Setup(x => x.IsLockedOutAsync(user)).ReturnsAsync(true);
+            SetUpRoles(user, isAdmin: false, isUser: true);
+
+            var result = await GoogleLogin();
+
+            result.UserId.Should().Be("user-1");
+            _identityServiceMock.Verify(x => x.ResetAccessFailedCountAsync(It.IsAny<User>()), Times.Never);
         }
 
         // ── RefreshTokenAsync ────────────────────────────────────────────────

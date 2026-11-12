@@ -25,9 +25,14 @@ namespace FamilyVaultApi.Services.Service
         private readonly IRegistrationCodeStore _registrationCodeStore;
         private readonly IVerificationSendLimiter _sendLimiter;
         private readonly IVerificationCodeSender _codeSender;
+        private readonly IGoogleIdTokenValidator _googleIdTokenValidator;
+
+        private const string GoogleProvider = "Google";
+        private const string InvalidGoogleLoginMessage = "Login com Google inválido.";
 
         public AccountService(IAccountRepository repository, IIdentityService identityService, ITokenService tokenService, IPhoneNumberService phoneNumberService, IRefreshTokenService refreshTokenService,
-            IRegistrationCodeStore registrationCodeStore, IVerificationSendLimiter sendLimiter, IVerificationCodeSender codeSender)
+            IRegistrationCodeStore registrationCodeStore, IVerificationSendLimiter sendLimiter, IVerificationCodeSender codeSender,
+            IGoogleIdTokenValidator googleIdTokenValidator)
         {
             _repository = repository;
             _identityService = identityService;
@@ -37,6 +42,7 @@ namespace FamilyVaultApi.Services.Service
             _registrationCodeStore = registrationCodeStore;
             _sendLimiter = sendLimiter;
             _codeSender = codeSender;
+            _googleIdTokenValidator = googleIdTokenValidator;
         }
 
         // Telefone em E.164 ou e-mail em trim + minúsculas; null se o formato for inválido
@@ -163,6 +169,10 @@ namespace FamilyVaultApi.Services.Service
             if (await _identityService.IsLockedOutAsync(user))
                 throw new UnauthorizedAccessException("Usuário ou senha inválidos.");
 
+            // Conta criada pelo Google ainda sem senha: 401 genérico sem contar no lockout, para ninguém bloquear a conta de outro
+            if (!await _identityService.HasPasswordAsync(user))
+                throw new UnauthorizedAccessException("Usuário ou senha inválidos.");
+
             if (!await _identityService.CheckPasswordAsync(user, loginDto.Password))
             {
                 await _identityService.AccessFailedAsync(user);
@@ -187,6 +197,92 @@ namespace FamilyVaultApi.Services.Service
                 RefreshToken = refreshToken
             };
         }
+
+        public async Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginRequestDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto?.IdToken))
+                throw new BadRequestException("Informe o idToken do Google.");
+
+            if (!_googleIdTokenValidator.IsConfigured)
+                throw new ServiceUnavailableException("Login com Google não configurado.");
+
+            var google = await _googleIdTokenValidator.ValidateAsync(dto.IdToken);
+            if (google == null || !google.EmailVerified || string.IsNullOrWhiteSpace(google.Email) || !EmailValidator.Validar(google.Email.Trim()))
+                throw new UnauthorizedAccessException(InvalidGoogleLoginMessage);
+
+            var email = EmailValidator.Normalizar(google.Email);
+
+            // A conta é achada pelo sub (o e-mail pode mudar no Google); sem vínculo, pelo e-mail verificado
+            var user = await _identityService.FindByExternalLoginAsync(GoogleProvider, google.Subject);
+            if (user == null)
+            {
+                user = await _identityService.FindByEmailAsync(email);
+                if (user != null)
+                {
+                    await EnsureGoogleAllowedAsync(user);
+                    await _identityService.LinkExternalLoginAsync(user, GoogleProvider, google.Subject);
+                }
+                else
+                {
+                    var (firstName, lastName) = GoogleNames(google, email);
+                    try
+                    {
+                        user = await _identityService.RegisterExternalUserAsync(email, firstName, lastName, GoogleProvider, google.Subject);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Dois primeiros logins simultâneos: o outro request já criou a conta
+                        user = await _identityService.FindByExternalLoginAsync(GoogleProvider, google.Subject);
+                        if (user == null)
+                            throw;
+                    }
+                }
+            }
+
+            // O lockout protege contra chute de senha; o Google já provou a identidade, então não barra nem zera
+            var (isAdmin, isUser) = await EnsureGoogleAllowedAsync(user);
+
+            await _identityService.UpdateLastLoginAsync(user);
+
+            var token = await BuildAccessTokenAsync(user, isAdmin, isUser);
+            var refreshToken = await _refreshTokenService.CreateSessionAsync(user.Id, AuthClient.App);
+
+            return new AuthResponseDto
+            {
+                UserId = user.Id,
+                Token = token,
+                RefreshToken = refreshToken
+            };
+        }
+
+        // Administrator entra só com e-mail e senha: quem tomar a conta Google dele não vira admin
+        private async Task<(bool IsAdmin, bool IsUser)> EnsureGoogleAllowedAsync(Data.Entities.User user)
+        {
+            var (isAdmin, isUser) = await _identityService.GetRolesAsync(user);
+            if (isAdmin)
+                throw new SecurityException("Administrador entra com e-mail e senha.");
+            if (!isUser)
+                throw new SecurityException("Usuário sem role válida.");
+
+            return (isAdmin, isUser);
+        }
+
+        // Mesmos limites do cadastro: nome até 30, sobrenome até 70
+        private static (string FirstName, string LastName) GoogleNames(GoogleIdentity google, string email)
+        {
+            var nameParts = (google.Name ?? string.Empty).Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            var firstName = !string.IsNullOrWhiteSpace(google.GivenName) ? google.GivenName.Trim()
+                : nameParts.Length > 0 ? nameParts[0]
+                : email.Split('@')[0];
+            var lastName = !string.IsNullOrWhiteSpace(google.FamilyName) ? google.FamilyName.Trim()
+                : nameParts.Length > 1 && string.IsNullOrWhiteSpace(google.GivenName) ? nameParts[1]
+                : string.Empty;
+
+            return (Truncate(firstName, 30), Truncate(lastName, 70));
+        }
+
+        private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max].TrimEnd();
 
         private async Task<string> BuildAccessTokenAsync(Data.Entities.User user, bool isAdmin, bool isUser)
         {
