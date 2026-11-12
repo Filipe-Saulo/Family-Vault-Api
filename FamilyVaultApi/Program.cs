@@ -3,6 +3,7 @@ using AspNetCoreRateLimit;
 using FamilyVaultApi.Common;
 using FamilyVaultApi.Data;
 using FamilyVaultApi.Data.Entities;
+using FamilyVaultApi.Mcp;
 using FamilyVaultApi.Mapping;
 using FamilyVaultApi.Middleware;
 using FamilyVaultApi.Models.Internal;
@@ -11,15 +12,18 @@ using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Repositories.Repository;
 using FamilyVaultApi.Services.IService;
 using FamilyVaultApi.Services.Service;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -231,6 +235,14 @@ builder.Services.AddHostedService<ChargeProcessingWorker>();
 //dashboard
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
+//mcp
+builder.Services.AddScoped<IPersonalAccessTokenRepository, PersonalAccessTokenRepository>();
+builder.Services.AddScoped<IMcpTokenService, McpTokenService>();
+// Sem sessão no servidor: cada POST em /mcp é independente, e as ferramentas usam o escopo da própria requisição
+builder.Services.AddMcpServer()
+    .WithHttpTransport(options => options.Stateless = true)
+    .WithTools<FamilyVaultTools>()
+    .WithRequestFilters(filters => filters.AddCallToolFilter(McpToolLogging.Filter));
 
 builder.Services.AddAuthentication(options =>
 {    
@@ -263,10 +275,17 @@ builder.Services.AddAuthentication(options =>
             OnForbidden = context =>
                 ApiResponseWriter.WriteAsync(context.HttpContext, StatusCodes.Status403Forbidden, "Você não tem permissão para acessar este recurso.")
         };
-    });
+    })
+    // Token pessoal do MCP: só a policy do /mcp usa este esquema
+    .AddScheme<AuthenticationSchemeOptions, McpTokenAuthenticationHandler>(McpTokenAuthenticationHandler.SchemeName, null);
 
 builder.Services.AddAuthorization(options =>
 {
+    // Só o token pessoal autentica em /mcp: o JWT não entra nesta policy
+    options.AddPolicy(McpTokenAuthenticationHandler.PolicyName, p => p
+        .AddAuthenticationSchemes(McpTokenAuthenticationHandler.SchemeName)
+        .RequireAuthenticatedUser()
+        .RequireClaim(McpTokenAuthenticationHandler.ScopeClaim, McpTokenService.ReadScope));
     options.AddPolicy(nameof(PermissionCode.ManageCategories), p => p.RequireClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageCategories)));
     options.AddPolicy(nameof(PermissionCode.ManageTransactionTypes), p => p.RequireClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageTransactionTypes)));
     options.AddPolicy(nameof(PermissionCode.ManageTransactions), p => p.RequireClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageTransactions)));
@@ -311,6 +330,22 @@ builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection(
 builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
+// Limite por token no /mcp (Mcp:CallsPerMinute, padrão 60), por requisição HTTP
+var mcpCallsPerMinute = builder.Configuration.GetValue("Mcp:CallsPerMinute", 60);
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy(McpRateLimit.PolicyName, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst(McpTokenAuthenticationHandler.TokenIdClaim)?.Value ?? string.Empty,
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = mcpCallsPerMinute,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+    options.OnRejected = (context, _) =>
+        new ValueTask(ApiResponseWriter.WriteAsync(context.HttpContext, StatusCodes.Status429TooManyRequests, "Limite de chamadas ao MCP excedido. Tente novamente em instantes."));
+});
+
 var app = builder.Build();
 
 await app.SeedAdministratorAsync();
@@ -345,8 +380,13 @@ app.Use(async (context, next) =>
 
 app.UseAuthentication();
 app.UseAuthorization();
+// Depois da autorização: a partição do limite usa o token que a policy do /mcp autenticou
+app.UseRateLimiter();
 
 app.MapControllers();
+app.MapMcp("/mcp")
+    .RequireAuthorization(McpTokenAuthenticationHandler.PolicyName)
+    .RequireRateLimiting(McpRateLimit.PolicyName);
 app.MapHealthChecks("/health");
 
 app.Run();
