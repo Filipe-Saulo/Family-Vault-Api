@@ -15,6 +15,7 @@ namespace FamilyVaultApi.Data.Entities
         public string? Barcode { get; set; }
         public int? SuggestedCategoryId { get; set; }
         public int? PossibleDuplicateTransactionId { get; set; }
+        public int? PossibleDuplicateChargeId { get; set; }
         public ChargeStatus Status { get; set; }
         public ChargeExtractionSource ExtractionSource { get; set; }
         public int? TransactionId { get; set; }
@@ -25,6 +26,7 @@ namespace FamilyVaultApi.Data.Entities
         public virtual InboundDocument InboundDocument { get; set; } = null!;
         public virtual Category? SuggestedCategory { get; set; }
         public virtual Transaction? PossibleDuplicateTransaction { get; set; }
+        public virtual Charge? PossibleDuplicateCharge { get; set; }
         public virtual Transaction? Transaction { get; set; }
     }
 }

@@ -307,6 +307,11 @@ namespace FamilyVaultApi.Services.Service
             if (amount.HasValue && dueDate.HasValue)
                 possibleDuplicateId = await _repository.FindPossibleDuplicateTransactionIdAsync(document.UserId, amount.Value, dueDate.Value);
 
+            int? possibleDuplicateChargeId = null;
+            if (amount.HasValue && dueDate.HasValue)
+                possibleDuplicateChargeId = await _repository.FindPossibleDuplicateChargeIdAsync(document.UserId, amount.Value, dueDate.Value,
+                    document.Sender, ChargeValidator.NormalizeText(result.Issuer, 200), _options.DuplicateCharges.DueDateWindowDays);
+
             var charge = new Charge
             {
                 UserId = document.UserId,
@@ -317,6 +322,7 @@ namespace FamilyVaultApi.Services.Service
                 Barcode = barcode,
                 SuggestedCategoryId = suggestedCategoryId,
                 PossibleDuplicateTransactionId = possibleDuplicateId,
+                PossibleDuplicateChargeId = possibleDuplicateChargeId,
                 Status = ChargeStatus.PendingReview,
                 ExtractionSource = source,
                 CreatedAt = now

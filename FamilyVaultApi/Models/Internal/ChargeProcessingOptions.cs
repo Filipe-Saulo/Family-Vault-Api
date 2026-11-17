@@ -7,6 +7,13 @@ namespace FamilyVaultApi.Models.Internal
         public ChargeDailyLimitOptions DailyLimits { get; set; } = new();
         public ChargeWorkerOptions Worker { get; set; } = new();
         public ChargePasswordRequiredOptions PasswordRequired { get; set; } = new();
+        public ChargeDuplicateOptions DuplicateCharges { get; set; } = new();
+    }
+
+    public class ChargeDuplicateOptions
+    {
+        // Dias de diferença entre vencimentos para duas charges pendentes do mesmo remetente serem possíveis duplicatas
+        public int DueDateWindowDays { get; set; } = 10;
     }
 
     public class ChargePasswordRequiredOptions

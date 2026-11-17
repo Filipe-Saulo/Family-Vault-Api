@@ -41,6 +41,7 @@ namespace FamilyVaultApi.Repositories.IRepository
         // Outro anexo do mesmo e-mail já virou conta, pelo arquivo ou pelo corpo (ExternalId com o prefixo da mensagem)
         Task<bool> MessageHasChargeAsync(string userId, string messagePrefix);
         Task<int?> FindPossibleDuplicateTransactionIdAsync(string userId, decimal amount, DateTime dueDate);
+        Task<int?> FindPossibleDuplicateChargeIdAsync(string userId, decimal amount, DateTime dueDate, string? sender, string? issuer, int windowDays);
 
         // PDF com senha
         Task MarkPasswordRequiredAsync(int documentId, string reason, DateTime now, bool keepContent);

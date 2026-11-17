@@ -135,7 +135,8 @@ namespace FamilyVaultApi.Mcp
                     c.Amount,
                     c.DueDate.HasValue ? DateOnly.FromDateTime(c.DueDate.Value) : null,
                     c.SuggestedCategoryId,
-                    c.PossibleDuplicateTransactionId))
+                    c.PossibleDuplicateTransactionId,
+                    c.PossibleDuplicateChargeId))
                 .ToList();
         }
 
@@ -199,5 +200,5 @@ namespace FamilyVaultApi.Mcp
 
     public record CategoryResult(int CategoryId, string Description, string Type, bool IsGlobal);
 
-    public record PendingChargeResult(int ChargeId, string Source, string? Issuer, string? Description, decimal? Amount, DateOnly? DueDate, int? SuggestedCategoryId, int? PossibleDuplicateTransactionId);
+    public record PendingChargeResult(int ChargeId, string Source, string? Issuer, string? Description, decimal? Amount, DateOnly? DueDate, int? SuggestedCategoryId, int? PossibleDuplicateTransactionId, int? PossibleDuplicateChargeId);
 }
