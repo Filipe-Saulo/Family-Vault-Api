@@ -79,7 +79,10 @@ namespace FamilyVaultApi.Mapping
 
             CreateMap<InboundDocument, ChargeFailureResponseDto>()
                 .ForMember(d => d.DocumentId, opt => opt.MapFrom(src => src.InboundDocumentId))
-                .ForMember(d => d.Source, opt => opt.MapFrom(src => src.Source.ToString()));
+                .ForMember(d => d.Source, opt => opt.MapFrom(src => src.Source.ToString()))
+                .ForMember(d => d.Status, opt => opt.MapFrom(src => src.Status.ToString()))
+                // Depende do limite configurado: preenchido pelo repositório
+                .ForMember(d => d.PasswordAttemptsRemaining, opt => opt.Ignore());
 
             CreateMap<GmailConnection, GmailStatusResponseDto>()
                 .ForMember(d => d.Connected, opt => opt.MapFrom(src => src.Status == GmailConnectionStatus.Active))

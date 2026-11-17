@@ -20,7 +20,7 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<(InboundDocumentSource Source, string? Sender)?> GetDocumentSenderAsync(int chargeId);
         Task<ChargeResponseDto?> GetResponseByIdAsync(int chargeId);
         Task<PagedResult<ChargeResponseDto>> GetAllAsync(string userId, ChargeQueryRequestDto query);
-        Task<PagedResult<ChargeFailureResponseDto>> GetFailuresAsync(string userId, PagedFilterDto query);
+        Task<PagedResult<ChargeFailureResponseDto>> GetFailuresAsync(string userId, PagedFilterDto query, int maxPasswordAttempts);
 
         // Confirmação e descarte (UPDATE condicional em status = PendingReview; false = outro já decidiu)
         Task ExecuteInTransactionAsync(Func<Task> action);
@@ -39,5 +39,14 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<List<ChargeCategoryOption>> GetExpenseCategoriesAsync(string userId);
         Task<bool> UserHasChargeWithBarcodeAsync(string userId, string barcode);
         Task<int?> FindPossibleDuplicateTransactionIdAsync(string userId, decimal amount, DateTime dueDate);
+
+        // PDF com senha
+        Task MarkPasswordRequiredAsync(int documentId, string reason, DateTime now, bool keepContent);
+        Task<bool> TryReservePasswordAttemptAsync(int documentId, int maxAttempts);
+        Task<bool> TryRequeueUnlockedDocumentAsync(int documentId, byte[] unlockedContent);
+        Task<bool> TryCompleteManuallyAsync(int documentId, Charge charge);
+        Task<int> ExpirePasswordRequiredUploadsAsync(DateTime requiredBefore, string reason);
+        Task<string?> GetSenderPasswordAsync(string userId, string sender);
+        Task SaveSenderPasswordAsync(string userId, string sender, string passwordEncrypted, DateTime now);
     }
 }

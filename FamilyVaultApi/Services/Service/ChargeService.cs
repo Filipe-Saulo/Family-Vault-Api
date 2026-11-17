@@ -23,14 +23,20 @@ namespace FamilyVaultApi.Services.Service
         private readonly ITransactionService _transactionService;
         private readonly ChargeProcessingOptions _options;
         private readonly TimeProvider _timeProvider;
+        // Nulos sem o Gmail configurado: documento do Gmail não recebe senha e nenhuma senha é lembrada
+        private readonly GmailDocumentFetcher? _gmailFetcher;
+        private readonly GmailTokenProtector? _protector;
 
-        public ChargeService(IChargeRepository repository, IGmailRepository gmailRepository, ITransactionService transactionService, IOptions<ChargeProcessingOptions> options, TimeProvider timeProvider)
+        public ChargeService(IChargeRepository repository, IGmailRepository gmailRepository, ITransactionService transactionService, IOptions<ChargeProcessingOptions> options, TimeProvider timeProvider,
+            GmailDocumentFetcher? gmailFetcher = null, GmailTokenProtector? protector = null)
         {
             _repository = repository;
             _gmailRepository = gmailRepository;
             _transactionService = transactionService;
             _options = options.Value;
             _timeProvider = timeProvider;
+            _gmailFetcher = gmailFetcher;
+            _protector = protector;
         }
 
         public async Task<ChargeUploadResponseDto> UploadAsync(byte[] content, ClaimsPrincipal userClaims)
@@ -105,7 +111,7 @@ namespace FamilyVaultApi.Services.Service
             query ??= new PagedFilterDto();
             NormalizePaging(query);
 
-            return await _repository.GetFailuresAsync(userId, query);
+            return await _repository.GetFailuresAsync(userId, query, _options.PasswordRequired.MaxAttempts);
         }
 
         public async Task<TransactionResponseDto> ConfirmAsync(int id, ConfirmChargeDto dto, ClaimsPrincipal userClaims)
@@ -151,6 +157,142 @@ namespace FamilyVaultApi.Services.Service
                 var document = await _repository.GetDocumentSenderAsync(id);
                 if (document is { Source: InboundDocumentSource.Gmail, Sender: { Length: > 0 and <= GmailIgnoredSender.MaxSenderLength } })
                     await _gmailRepository.AddIgnoredSenderAsync(ownerUserId, document.Value.Sender!, _timeProvider.GetUtcNow().UtcDateTime);
+            }
+        }
+
+        // Informar a senha: abre o PDF na hora; certa, o documento volta à fila com o PDF já aberto
+        public async Task<ChargeUploadResponseDto> SubmitDocumentPasswordAsync(int documentId, SubmitDocumentPasswordDto dto, ClaimsPrincipal userClaims, CancellationToken cancellationToken)
+        {
+            if (dto == null)
+                throw new ArgumentNullException(nameof(dto));
+
+            var document = await GetWaitingPasswordDocumentAsync(documentId, userClaims);
+            var maxAttempts = _options.PasswordRequired.MaxAttempts;
+
+            // Conferido antes de baixar do Gmail; a reserva abaixo decide de verdade
+            if (document.PasswordAttempts >= maxAttempts)
+                throw new TooManyRequestsException(PasswordAttemptsExhaustedMessage);
+
+            var locked = await GetLockedContentAsync(document, cancellationToken);
+
+            if (!await _repository.TryReservePasswordAttemptAsync(documentId, maxAttempts))
+            {
+                await GetWaitingPasswordDocumentAsync(documentId, userClaims);
+                throw new TooManyRequestsException(PasswordAttemptsExhaustedMessage);
+            }
+
+            var unlocked = PdfUnlocker.TryUnlock(locked, dto.Password);
+            if (unlocked == null)
+            {
+                // Relido depois da reserva: com pedidos em paralelo, o número lido antes estaria velho
+                var attempts = (await _repository.GetDocumentAsync(documentId))?.PasswordAttempts ?? maxAttempts;
+                var remaining = Math.Max(0, maxAttempts - attempts);
+                throw new BadRequestException(remaining > 0
+                    ? $"Senha incorreta. Restam {remaining} tentativa(s)."
+                    : "Senha incorreta. " + PasswordAttemptsExhaustedMessage);
+            }
+
+            // Antes de devolver à fila: se gravar falhar, o documento continua esperando a senha e a pessoa tenta de novo.
+            // Só e-mail tem remetente; no upload, rememberForSender não tem efeito
+            if (dto.RememberForSender && _protector != null
+                && document is { Source: InboundDocumentSource.Gmail, Sender: { Length: > 0 and <= GmailIgnoredSender.MaxSenderLength } })
+            {
+                await _repository.SaveSenderPasswordAsync(document.UserId, document.Sender, _protector.Protect(dto.Password), _timeProvider.GetUtcNow().UtcDateTime);
+            }
+
+            if (!await _repository.TryRequeueUnlockedDocumentAsync(documentId, unlocked))
+                throw new ConflictException(NotWaitingPasswordMessage);
+
+            return new ChargeUploadResponseDto { DocumentId = documentId };
+        }
+
+        // Informar o valor: despesa e charge já confirmada na mesma transação de banco; o documento termina Done
+        public async Task<TransactionResponseDto> CreateManualChargeAsync(int documentId, ManualChargeDto dto, ClaimsPrincipal userClaims)
+        {
+            if (dto == null)
+                throw new ArgumentNullException(nameof(dto));
+
+            var document = await GetWaitingPasswordDocumentAsync(documentId, userClaims);
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+
+            TransactionResponseDto? transaction = null;
+
+            await _repository.ExecuteInTransactionAsync(async () =>
+            {
+                transaction = await _transactionService.CreateAsync(new CreateTransactionDto
+                {
+                    UserId = document.UserId,
+                    CategoryId = dto.CategoryId,
+                    TransactionTypeId = (int)TransactionTypeCode.Expense,
+                    Description = dto.Description,
+                    Amount = dto.Amount,
+                    TransactionDate = dto.DueDate!.Value
+                }, userClaims);
+
+                var charge = new Charge
+                {
+                    UserId = document.UserId,
+                    Issuer = ChargeValidator.NormalizeText(string.IsNullOrWhiteSpace(dto.Issuer) ? document.Sender : dto.Issuer, 200),
+                    Description = ChargeValidator.NormalizeText(dto.Description, 500),
+                    Amount = dto.Amount,
+                    DueDate = dto.DueDate.Value,
+                    SuggestedCategoryId = dto.CategoryId,
+                    Status = ChargeStatus.Confirmed,
+                    TransactionId = transaction.TransactionId,
+                    CreatedAt = now
+                };
+
+                if (!await _repository.TryCompleteManuallyAsync(documentId, charge))
+                    throw new ConflictException(NotWaitingPasswordMessage);
+            });
+
+            return transaction!;
+        }
+
+        private const string NotWaitingPasswordMessage = "Este documento não está esperando a senha.";
+        private const string PasswordAttemptsExhaustedMessage = "Limite de tentativas de senha atingido. Informe o valor da conta.";
+        private const string EmailGoneReason = "O e-mail não está mais disponível no Gmail.";
+
+        // Documento é pessoal como a charge: nem o Administrator mexe no de outra pessoa
+        private async Task<InboundDocument> GetWaitingPasswordDocumentAsync(int documentId, ClaimsPrincipal userClaims)
+        {
+            var callerId = GetCallerId(userClaims);
+
+            var document = await _repository.GetDocumentAsync(documentId)
+                ?? throw new NotFoundException("Documento", documentId);
+
+            if (document.UserId != callerId)
+                throw new SecurityException("Você não tem permissão para acessar este documento.");
+
+            if (document.Status != InboundDocumentStatus.PasswordRequired)
+                throw new ConflictException(NotWaitingPasswordMessage);
+
+            return document;
+        }
+
+        // O PDF ainda trancado: o arquivo guardado do upload ou o anexo baixado de novo do Gmail
+        private async Task<byte[]> GetLockedContentAsync(InboundDocument document, CancellationToken cancellationToken)
+        {
+            if (document.Source == InboundDocumentSource.Upload)
+                return document.TemporaryContent is { Length: > 0 } content
+                    ? content
+                    : throw new ConflictException("O arquivo não está mais disponível. Envie o PDF de novo.");
+
+            if (_gmailFetcher == null)
+                throw new BadRequestException("A integração com o Gmail não está configurada.");
+
+            try
+            {
+                return await _gmailFetcher.FetchAsync(document, cancellationToken);
+            }
+            catch (GmailAccessRevokedException)
+            {
+                throw new BadRequestException("Reconecte o Gmail para informar a senha.");
+            }
+            catch (GmailMessageNotFoundException)
+            {
+                await _repository.CompleteDocumentAsync(document.InboundDocumentId, InboundDocumentStatus.Failed, EmailGoneReason, null);
+                throw new ConflictException(EmailGoneReason);
             }
         }
 

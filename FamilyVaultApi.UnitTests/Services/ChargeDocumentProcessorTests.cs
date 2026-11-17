@@ -6,6 +6,7 @@ using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.IService;
 using FamilyVaultApi.Services.Service;
+using FamilyVaultApi.UnitTests.Helpers;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -159,7 +160,10 @@ namespace FamilyVaultApi.UnitTests.Services
         [Fact]
         public async Task ProcessNextAsync_GmailDocumentWithoutGmailConfigured_ShouldReleaseAndReturnFalse()
         {
-            SetupReservedDocument(Document(source: InboundDocumentSource.Gmail));
+            // Documento do Gmail não guarda o PDF (só depois da senha informada, já aberto)
+            var document = Document(source: InboundDocumentSource.Gmail);
+            document.TemporaryContent = null;
+            SetupReservedDocument(document);
 
             var processed = await _processor.ProcessNextAsync(CancellationToken.None);
 
@@ -172,27 +176,67 @@ namespace FamilyVaultApi.UnitTests.Services
         // ---------- Extração e falhas ----------
 
         [Fact]
-        public async Task ProcessNextAsync_EncryptedPdf_ShouldFailWithoutCallingExtractor()
+        public async Task ProcessNextAsync_EncryptedPdf_ShouldWaitForPasswordWithoutCallingExtractor()
         {
             SetupReservedDocument(Document(content: Encoding.ASCII.GetBytes("%PDF-1.7 << /Encrypt 5 0 R >>")));
 
             var processed = await _processor.ProcessNextAsync(CancellationToken.None);
 
             processed.Should().BeTrue();
-            _repository.Verify(r => r.CompleteDocumentAsync(1, InboundDocumentStatus.Failed, "O PDF está protegido por senha.", null), Times.Once);
+            _repository.Verify(r => r.MarkPasswordRequiredAsync(1, "O PDF está protegido por senha.", _time.Now.UtcDateTime, true), Times.Once);
+            _repository.Verify(r => r.CompleteDocumentAsync(It.IsAny<int>(), It.IsAny<InboundDocumentStatus>(), It.IsAny<string?>(), It.IsAny<Charge?>()), Times.Never);
             _extractor.Verify(e => e.ExtractAsync(It.IsAny<ChargeExtractionInput>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Theory]
         [InlineData("%PDF-1.7 << /Encrypt << /Filter /Standard >> >>")]
         [InlineData("%PDF-1.7 trailer << /Encrypt\n12 0 R >>")]
-        public async Task ProcessNextAsync_PdfWithEncryptDictionaryOrReference_ShouldFailAsPasswordProtected(string pdf)
+        public async Task ProcessNextAsync_PdfWithEncryptDictionaryOrReference_ShouldWaitForPassword(string pdf)
         {
             SetupReservedDocument(Document(content: Encoding.ASCII.GetBytes(pdf)));
 
             await _processor.ProcessNextAsync(CancellationToken.None);
 
-            _repository.Verify(r => r.CompleteDocumentAsync(1, InboundDocumentStatus.Failed, "O PDF está protegido por senha.", null), Times.Once);
+            _repository.Verify(r => r.MarkPasswordRequiredAsync(1, "O PDF está protegido por senha.", It.IsAny<DateTime>(), true), Times.Once);
+        }
+
+        [Fact]
+        public async Task ProcessNextAsync_UploadWithUserPassword_ShouldKeepTheFileWhileWaitingForPassword()
+        {
+            SetupReservedDocument(Document(content: TestPdfs.Create("fatura", userPassword: "12345")));
+
+            await _processor.ProcessNextAsync(CancellationToken.None);
+
+            _repository.Verify(r => r.MarkPasswordRequiredAsync(1, "O PDF está protegido por senha.", _time.Now.UtcDateTime, true), Times.Once);
+            _extractor.Verify(e => e.ExtractAsync(It.IsAny<ChargeExtractionInput>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ProcessNextAsync_PdfWithOwnerPasswordOnly_ShouldExtractTheUnlockedCopy()
+        {
+            // Sem senha de abertura (só de dono): abre com a senha vazia, sem pedir nada à pessoa
+            SetupReservedDocument(Document(content: TestPdfs.Create("so-dono", ownerPassword: "dono")));
+            ChargeExtractionInput? received = null;
+            _extractor.Setup(e => e.ExtractAsync(It.IsAny<ChargeExtractionInput>(), It.IsAny<CancellationToken>()))
+                .Callback((ChargeExtractionInput input, CancellationToken _) => received = input)
+                .ReturnsAsync(new ChargeExtractionResult { IsCharge = false });
+
+            await _processor.ProcessNextAsync(CancellationToken.None);
+
+            received.Should().NotBeNull();
+            TestPdfs.IsEncrypted(received!.Content).Should().BeFalse();
+            TestPdfs.ReadPageContent(received.Content).Should().Contain("so-dono");
+            _repository.Verify(r => r.MarkPasswordRequiredAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<bool>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ExpirePasswordRequiredAsync_ShouldFailUploadsOlderThanTheRetention()
+        {
+            _options.PasswordRequired.RetentionDays = 7;
+
+            await _processor.ExpirePasswordRequiredAsync();
+
+            _repository.Verify(r => r.ExpirePasswordRequiredUploadsAsync(_time.Now.UtcDateTime.AddDays(-7), "O prazo para informar a senha terminou."), Times.Once);
         }
 
         [Fact]

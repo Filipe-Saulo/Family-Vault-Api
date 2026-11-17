@@ -7,5 +7,9 @@ namespace FamilyVaultApi.Models.Dto.Responses.Charge
         public string? Sender { get; set; }
         public DateTime ReceivedAt { get; set; }
         public string? FailureReason { get; set; }
+        // Failed ou PasswordRequired
+        public string Status { get; set; } = string.Empty;
+        // Só no PasswordRequired: senhas que ainda podem ser tentadas
+        public int? PasswordAttemptsRemaining { get; set; }
     }
 }

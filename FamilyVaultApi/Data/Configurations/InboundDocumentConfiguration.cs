@@ -52,6 +52,10 @@ namespace FamilyVaultApi.Data.Configurations
 
             builder.Property(d => d.GmailScanId).HasColumnName("gmail_scan_id");
 
+            builder.Property(d => d.PasswordAttempts).HasColumnName("password_attempts").IsRequired().HasDefaultValue(0);
+
+            builder.Property(d => d.PasswordRequiredAt).HasColumnName("password_required_at");
+
             builder.Property(d => d.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");

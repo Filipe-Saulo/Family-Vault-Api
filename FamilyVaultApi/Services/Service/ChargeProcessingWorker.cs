@@ -45,6 +45,7 @@ namespace FamilyVaultApi.Services.Service
                     var processor = scope.ServiceProvider.GetRequiredService<ChargeDocumentProcessor>();
 
                     await processor.RequeueStuckAsync();
+                    await processor.ExpirePasswordRequiredAsync();
 
                     for (var i = 0; i < _options.Worker.BatchSize; i++)
                     {
