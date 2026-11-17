@@ -286,6 +286,14 @@ namespace FamilyVaultApi.Repositories.Repository
             {
                 charge.InboundDocumentId = documentId;
                 _context.Charges.Add(charge);
+
+                // Marca a candidata no sentido contrário (se ainda não aponta para outra), na mesma transação
+                if (charge.PossibleDuplicateChargeId.HasValue)
+                {
+                    var other = await _context.Charges.FirstOrDefaultAsync(c => c.ChargeId == charge.PossibleDuplicateChargeId.Value);
+                    if (other != null && other.PossibleDuplicateChargeId == null)
+                        other.PossibleDuplicateCharge = charge;
+                }
             }
 
             await _context.SaveChangesAsync();
@@ -377,6 +385,34 @@ namespace FamilyVaultApi.Repositories.Repository
                 .OrderBy(t => Math.Abs((t.TransactionDate.Date - dueDate.Date).TotalDays))
                 .ThenBy(t => t.TransactionId)
                 .Select(t => (int?)t.TransactionId)
+                .FirstOrDefault();
+        }
+
+        // Outra charge PendingReview do usuário, mesmo valor, vencimento a até windowDays dias e mesmo remetente: sender igual (os dois
+        // preenchidos) ou, se um dos dois não tem sender (upload), emissor igual sem diferenciar maiúsculas. A de vencimento mais próximo
+        public async Task<int?> FindPossibleDuplicateChargeIdAsync(string userId, decimal amount, DateTime dueDate, string? sender, string? issuer, int windowDays)
+        {
+            var from = dueDate.Date.AddDays(-windowDays);
+            var to = dueDate.Date.AddDays(windowDays + 1);
+            var issuerLower = string.IsNullOrWhiteSpace(issuer) ? null : issuer.ToLower();
+
+            var candidates = await _context.Charges
+                .AsNoTracking()
+                .Where(c => c.UserId == userId
+                    && c.Status == ChargeStatus.PendingReview
+                    && c.Amount == amount
+                    && c.DueDate >= from
+                    && c.DueDate < to
+                    && ((sender != null && c.InboundDocument.Sender == sender)
+                        || ((sender == null || c.InboundDocument.Sender == null)
+                            && issuerLower != null && c.Issuer != null && c.Issuer.ToLower() == issuerLower)))
+                .Select(c => new { c.ChargeId, c.DueDate })
+                .ToListAsync();
+
+            return candidates
+                .OrderBy(c => Math.Abs((c.DueDate!.Value.Date - dueDate.Date).TotalDays))
+                .ThenBy(c => c.ChargeId)
+                .Select(c => (int?)c.ChargeId)
                 .FirstOrDefault();
         }
 

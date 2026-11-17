@@ -27,6 +27,7 @@ namespace FamilyVaultApi.Data.Configurations
             builder.Property(c => c.Barcode).HasColumnName("barcode").HasMaxLength(48);
             builder.Property(c => c.SuggestedCategoryId).HasColumnName("suggested_category_id");
             builder.Property(c => c.PossibleDuplicateTransactionId).HasColumnName("possible_duplicate_transaction_id");
+            builder.Property(c => c.PossibleDuplicateChargeId).HasColumnName("possible_duplicate_charge_id");
 
             builder.Property(c => c.Status)
                 .HasColumnName("status")
@@ -50,6 +51,7 @@ namespace FamilyVaultApi.Data.Configurations
             builder.HasIndex(c => c.InboundDocumentId).IsUnique().HasDatabaseName("idx_charges_inbound_document");
             builder.HasIndex(c => new { c.UserId, c.Status }).HasDatabaseName("idx_charges_user_status");
             builder.HasIndex(c => new { c.UserId, c.Barcode }).HasDatabaseName("idx_charges_user_barcode");
+            builder.HasIndex(c => c.PossibleDuplicateChargeId).HasDatabaseName("idx_charges_possible_duplicate_charge");
 
             // Foreign keys
             builder.HasOne(c => c.User)
@@ -74,6 +76,12 @@ namespace FamilyVaultApi.Data.Configurations
                 .WithMany()
                 .HasForeignKey(c => c.PossibleDuplicateTransactionId)
                 .HasConstraintName("fk_charges_possible_duplicate_transaction")
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.HasOne(c => c.PossibleDuplicateCharge)
+                .WithMany()
+                .HasForeignKey(c => c.PossibleDuplicateChargeId)
+                .HasConstraintName("fk_charges_possible_duplicate_charge")
                 .OnDelete(DeleteBehavior.SetNull);
 
             builder.HasOne(c => c.Transaction)

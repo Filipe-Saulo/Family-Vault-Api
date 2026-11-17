@@ -246,6 +246,10 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("varchar(200)")
                         .HasColumnName("issuer");
 
+                    b.Property<int?>("PossibleDuplicateChargeId")
+                        .HasColumnType("int")
+                        .HasColumnName("possible_duplicate_charge_id");
+
                     b.Property<int?>("PossibleDuplicateTransactionId")
                         .HasColumnType("int")
                         .HasColumnName("possible_duplicate_transaction_id");
@@ -275,6 +279,9 @@ namespace FamilyVaultApi.Migrations
                     b.HasIndex("InboundDocumentId")
                         .IsUnique()
                         .HasDatabaseName("idx_charges_inbound_document");
+
+                    b.HasIndex("PossibleDuplicateChargeId")
+                        .HasDatabaseName("idx_charges_possible_duplicate_charge");
 
                     b.HasIndex("PossibleDuplicateTransactionId");
 
@@ -1295,6 +1302,12 @@ namespace FamilyVaultApi.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_charges_inbound_document");
 
+                    b.HasOne("FamilyVaultApi.Data.Entities.Charge", "PossibleDuplicateCharge")
+                        .WithMany()
+                        .HasForeignKey("PossibleDuplicateChargeId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_charges_possible_duplicate_charge");
+
                     b.HasOne("FamilyVaultApi.Data.Entities.Transaction", "PossibleDuplicateTransaction")
                         .WithMany()
                         .HasForeignKey("PossibleDuplicateTransactionId")
@@ -1321,6 +1334,8 @@ namespace FamilyVaultApi.Migrations
                         .HasConstraintName("fk_charges_user");
 
                     b.Navigation("InboundDocument");
+
+                    b.Navigation("PossibleDuplicateCharge");
 
                     b.Navigation("PossibleDuplicateTransaction");
 
