@@ -15,6 +15,9 @@ namespace FamilyVaultApi.Services.Service
     public class ChargeDocumentProcessor
     {
         private const int CandidatesPerCall = 10;
+        // Corpo de e-mail maior que isso é cortado antes de ir para a IA (faturas trazem o resumo no começo)
+        public const int EmailBodyMaxChars = 20_000;
+        public const string EmailBodyContentType = "text/plain";
         public const string PasswordProtectedReason = "O PDF está protegido por senha.";
         private const string PasswordExpiredReason = "O prazo para informar a senha terminou.";
         private const string GenericFailureReason = "Não foi possível processar o documento.";
@@ -154,6 +157,10 @@ namespace FamilyVaultApi.Services.Service
                 var unlocked = await TryUnlockWithoutAskingAsync(document, content);
                 if (unlocked == null)
                 {
+                    // Gmail: antes de pedir a senha, tenta a conta pelo corpo do e-mail
+                    if (document.Source == InboundDocumentSource.Gmail && await TryCompleteFromEmailBodyAsync(document, now, cancellationToken))
+                        return;
+
                     // O upload guarda o arquivo até a senha (ou o prazo); o do Gmail é baixado de novo quando ela chegar
                     _logger.LogInformation("Documento {DocumentId} espera a senha do PDF.", document.InboundDocumentId);
                     await _repository.MarkPasswordRequiredAsync(document.InboundDocumentId, PasswordProtectedReason, now, keepContent: document.Source == InboundDocumentSource.Upload);
@@ -199,6 +206,88 @@ namespace FamilyVaultApi.Services.Service
                 return;
             }
 
+            await CompleteWithChargeAsync(document, result, categories, ChargeExtractionSource.Document, now);
+        }
+
+        // PDF protegido do Gmail sem senha que abra: a IA lê o corpo do e-mail. true = o documento foi tratado
+        // (conta criada, ou devolvido à fila por falha passageira da IA); false = segue para PasswordRequired.
+        // O corpo é texto de terceiros: passa pelas mesmas validações da extração do PDF e nunca vai para o log.
+        private async Task<bool> TryCompleteFromEmailBodyAsync(InboundDocument document, DateTime now, CancellationToken cancellationToken)
+        {
+            if (_gmailFetcher == null)
+                return false;
+
+            // O corpo descreve a fatura do e-mail: se outro anexo dele já virou conta (aberto ou pelo corpo), este espera a senha
+            var messagePrefix = GmailDocumentFetcher.MessagePrefixOf(document.ExternalId);
+            if (messagePrefix == null || await _repository.MessageHasChargeAsync(document.UserId, messagePrefix))
+                return false;
+
+            string? body;
+            try
+            {
+                body = await _gmailFetcher.FetchBodyAsync(document, cancellationToken);
+            }
+            catch (GmailAccessRevokedException)
+            {
+                // Acesso retirado entre o download e a leitura do corpo: espera a reconexão sem gastar tentativa
+                await _repository.ReleaseDocumentAsync(document.InboundDocumentId);
+                return true;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // O corpo é um atalho: sem ele, a pessoa ainda informa a senha ou o valor
+                _logger.LogWarning("Não foi possível ler o corpo do e-mail do documento {DocumentId}: {ExceptionType}.", document.InboundDocumentId, ex.GetType().Name);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(body))
+                return false;
+
+            if (body.Length > EmailBodyMaxChars)
+                body = body[..(char.IsHighSurrogate(body[EmailBodyMaxChars - 1]) ? EmailBodyMaxChars - 1 : EmailBodyMaxChars)];
+
+            var categories = await _repository.GetExpenseCategoriesAsync(document.UserId);
+
+            ChargeExtractionResult result;
+            try
+            {
+                result = await _extractor.ExtractAsync(new ChargeExtractionInput
+                {
+                    Content = Encoding.UTF8.GetBytes(body),
+                    ContentType = EmailBodyContentType,
+                    ExpenseCategories = categories
+                }, cancellationToken);
+            }
+            catch (ChargeExtractionException)
+            {
+                // Corpo ilegível ou recusado: não é falha do documento, o PDF ainda pode ser aberto com a senha
+                return false;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError("Falha ao interpretar o corpo do e-mail do documento {DocumentId} (tentativa {Attempt}): {ExceptionType}.", document.InboundDocumentId, document.Attempts, ex.GetType().Name);
+
+                if (document.Attempts >= _options.Worker.MaxAttempts)
+                    return false;
+
+                await _repository.ReturnDocumentToPendingAsync(document.InboundDocumentId);
+                return true;
+            }
+
+            // Só vira conta com valor e vencimento válidos; senão a pessoa informa a senha
+            if (!result.IsCharge
+                || ChargeValidator.ValidateAmount(result.Amount) == null
+                || ChargeValidator.ValidateDueDate(result.DueDate, document.ReceivedAt) == null)
+                return false;
+
+            _logger.LogInformation("Documento {DocumentId} lido pelo corpo do e-mail.", document.InboundDocumentId);
+            await CompleteWithChargeAsync(document, result, categories, ChargeExtractionSource.EmailBody, now);
+            return true;
+        }
+
+        private async Task CompleteWithChargeAsync(InboundDocument document, ChargeExtractionResult result, IReadOnlyList<ChargeCategoryOption> categories,
+            ChargeExtractionSource source, DateTime now)
+        {
             var barcode = ChargeValidator.NormalizeBarcode(result.Barcode);
             if (barcode != null && await _repository.UserHasChargeWithBarcodeAsync(document.UserId, barcode))
             {
@@ -229,6 +318,7 @@ namespace FamilyVaultApi.Services.Service
                 SuggestedCategoryId = suggestedCategoryId,
                 PossibleDuplicateTransactionId = possibleDuplicateId,
                 Status = ChargeStatus.PendingReview,
+                ExtractionSource = source,
                 CreatedAt = now
             };
 

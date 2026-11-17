@@ -238,6 +238,7 @@ namespace FamilyVaultApi.Services.Service
                     DueDate = dto.DueDate.Value,
                     SuggestedCategoryId = dto.CategoryId,
                     Status = ChargeStatus.Confirmed,
+                    ExtractionSource = ChargeExtractionSource.Manual,
                     TransactionId = transaction.TransactionId,
                     CreatedAt = now
                 };

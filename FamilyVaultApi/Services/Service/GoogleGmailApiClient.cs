@@ -11,6 +11,8 @@ using Google.Apis.Services;
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Mail;
+using System.Text;
+using System.Text.RegularExpressions;
 using GoogleHttpClientFactory = Google.Apis.Http.IHttpClientFactory;
 
 namespace FamilyVaultApi.Services.Service
@@ -147,6 +149,70 @@ namespace FamilyVaultApi.Services.Service
 
             return DecodeBase64Url(body.Data ?? string.Empty);
         }
+
+        public async Task<string?> GetMessageBodyAsync(string accessToken, string messageId, CancellationToken cancellationToken)
+        {
+            var message = await GetFullMessageAsync(accessToken, messageId, cancellationToken);
+            return ExtractBodyText(message.Payload);
+        }
+
+        // Só partes de corpo (sem nome de arquivo); text/plain tem preferência sobre text/html
+        public static string? ExtractBodyText(MessagePart? payload)
+        {
+            var parts = Flatten(payload)
+                .Where(p => string.IsNullOrEmpty(p.Filename) && !string.IsNullOrEmpty(p.Body?.Data))
+                .ToList();
+
+            var plain = parts.FirstOrDefault(p => string.Equals(p.MimeType, "text/plain", StringComparison.OrdinalIgnoreCase));
+            if (plain != null)
+                return NullIfBlank(Decode(plain));
+
+            var html = parts.FirstOrDefault(p => string.Equals(p.MimeType, "text/html", StringComparison.OrdinalIgnoreCase));
+            return html != null ? NullIfBlank(HtmlToText(Decode(html))) : null;
+        }
+
+        private static string Decode(MessagePart part) => CharsetOf(part).GetString(DecodeBase64Url(part.Body!.Data));
+
+        // O Gmail entrega o corpo nos bytes do charset declarado; desconhecido, UTF-8
+        private static Encoding CharsetOf(MessagePart part)
+        {
+            var contentType = part.Headers?
+                .FirstOrDefault(h => string.Equals(h.Name, "Content-Type", StringComparison.OrdinalIgnoreCase))?.Value;
+            var match = contentType == null ? null : Regex.Match(contentType, @"charset\s*=\s*""?([^"";\s]+)", RegexOptions.IgnoreCase);
+
+            if (match is { Success: true })
+            {
+                try
+                {
+                    return Encoding.GetEncoding(match.Groups[1].Value);
+                }
+                catch (ArgumentException)
+                {
+                }
+            }
+
+            return Encoding.UTF8;
+        }
+
+        private static readonly Regex HiddenBlocks = new(@"<(script|style|head)\b[^>]*>.*?</\1\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+        private static readonly Regex LineBreakTags = new(@"<\s*(br|/p|/div|/tr|/li|/h[1-6])\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex Tags = new(@"<[^>]+>", RegexOptions.Compiled);
+        private static readonly Regex Spaces = new(@"[ \t ]+", RegexOptions.Compiled);
+        private static readonly Regex BlankLines = new(@"\n\s*\n+", RegexOptions.Compiled);
+
+        // Texto visível aproximado; o que interessa é o valor e o vencimento escritos no e-mail
+        public static string HtmlToText(string html)
+        {
+            var text = HiddenBlocks.Replace(html, " ");
+            text = LineBreakTags.Replace(text, "\n");
+            text = Tags.Replace(text, " ");
+            text = WebUtility.HtmlDecode(text);
+            text = Spaces.Replace(text, " ");
+            text = string.Join('\n', text.Split('\n').Select(line => line.Trim()));
+            return BlankLines.Replace(text, "\n\n").Trim();
+        }
+
+        private static string? NullIfBlank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
         private async Task<Message> GetFullMessageAsync(string accessToken, string messageId, CancellationToken cancellationToken)
         {

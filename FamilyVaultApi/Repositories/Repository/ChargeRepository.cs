@@ -352,6 +352,11 @@ namespace FamilyVaultApi.Repositories.Repository
             return await _context.Charges.AnyAsync(c => c.UserId == userId && c.Barcode == barcode);
         }
 
+        public async Task<bool> MessageHasChargeAsync(string userId, string messagePrefix)
+        {
+            return await _context.Charges.AnyAsync(c => c.UserId == userId && c.InboundDocument.ExternalId.StartsWith(messagePrefix));
+        }
+
         // Despesa do usuário com o mesmo valor e data a até 3 dias do vencimento; a de data mais próxima
         public async Task<int?> FindPossibleDuplicateTransactionIdAsync(string userId, decimal amount, DateTime dueDate)
         {

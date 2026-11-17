@@ -50,6 +50,8 @@ namespace FamilyVaultApi.Evals
                     ".pdf" => "application/pdf",
                     ".png" => "image/png",
                     ".jpg" or ".jpeg" => "image/jpeg",
+                    // Corpo de e-mail: o mesmo texto que o worker manda quando o PDF anexo está protegido por senha
+                    ".txt" => "text/plain",
                     _ => throw new InvalidOperationException($"Extensão sem tipo: {evalCase.File}.")
                 },
                 ExpenseCategories = Categories

@@ -26,35 +26,59 @@ namespace FamilyVaultApi.Services.Service
 
         public static string MessagePrefix(string messageId) => $"{ExternalIdPrefix}{messageId}:";
 
+        // Prefixo da mensagem a partir do ExternalId do documento; null se não for do Gmail
+        public static string? MessagePrefixOf(string externalId)
+        {
+            var parts = externalId.Split(':');
+            return parts.Length == 3 && parts[0] + ":" == ExternalIdPrefix ? MessagePrefix(parts[1]) : null;
+        }
+
         // Sem conexão ativa ou com o acesso retirado lança GmailAccessRevokedException (o documento espera a reconexão);
         // e-mail apagado lança GmailMessageNotFoundException.
         public async Task<byte[]> FetchAsync(InboundDocument document, CancellationToken cancellationToken)
         {
             var (messageId, partId) = ParseExternalId(document.ExternalId);
+            var accessToken = await GetAccessTokenAsync(document.UserId, cancellationToken);
 
-            var connection = await _repository.GetConnectionAsync(document.UserId);
+            return await CallAsync(document.UserId, () => _client.GetAttachmentAsync(accessToken, messageId, partId, cancellationToken));
+        }
+
+        // Texto do corpo do e-mail do documento (null sem corpo de texto); mesmas exceções do FetchAsync
+        public async Task<string?> FetchBodyAsync(InboundDocument document, CancellationToken cancellationToken)
+        {
+            var (messageId, _) = ParseExternalId(document.ExternalId);
+            var accessToken = await GetAccessTokenAsync(document.UserId, cancellationToken);
+
+            return await CallAsync(document.UserId, () => _client.GetMessageBodyAsync(accessToken, messageId, cancellationToken));
+        }
+
+        private async Task<string> GetAccessTokenAsync(string userId, CancellationToken cancellationToken)
+        {
+            var connection = await _repository.GetConnectionAsync(userId);
             if (connection == null || connection.Status != GmailConnectionStatus.Active)
                 throw new GmailAccessRevokedException();
 
-            string accessToken;
             try
             {
-                accessToken = await _client.GetAccessTokenAsync(_protector.Unprotect(connection.RefreshTokenEncrypted), cancellationToken);
+                return await _client.GetAccessTokenAsync(_protector.Unprotect(connection.RefreshTokenEncrypted), cancellationToken);
             }
             catch (Exception ex) when (ex is GmailAccessRevokedException or CryptographicException or FormatException)
             {
                 // Chave de criptografia trocada também deixa o token inútil: a pessoa reconecta
-                await _repository.MarkRevokedAsync(document.UserId);
+                await _repository.MarkRevokedAsync(userId);
                 throw new GmailAccessRevokedException();
             }
+        }
 
+        private async Task<T> CallAsync<T>(string userId, Func<Task<T>> call)
+        {
             try
             {
-                return await _client.GetAttachmentAsync(accessToken, messageId, partId, cancellationToken);
+                return await call();
             }
             catch (GmailAccessRevokedException)
             {
-                await _repository.MarkRevokedAsync(document.UserId);
+                await _repository.MarkRevokedAsync(userId);
                 throw;
             }
         }
