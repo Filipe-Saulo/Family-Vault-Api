@@ -25,8 +25,12 @@ namespace FamilyVaultApi.Evals
             try
             {
                 var input = dataset.InputFor(evalCase);
-                var prompt = $"O documento está no arquivo {fileName}, nesta pasta. Leia-o com a ferramenta Read.\n\n" +
-                             AnthropicChargeExtractor.BuildCategoryText(input.ExpenseCategories);
+                // Corpo de e-mail vai no próprio prompt, delimitado como no extrator; arquivo, pela ferramenta Read
+                var prompt = input.ContentType == "text/plain"
+                    ? AnthropicChargeExtractor.WrapEmailBody(System.Text.Encoding.UTF8.GetString(input.Content)) + "\n\n" +
+                      AnthropicChargeExtractor.BuildCategoryText(input.ExpenseCategories)
+                    : $"O documento está no arquivo {fileName}, nesta pasta. Leia-o com a ferramenta Read.\n\n" +
+                      AnthropicChargeExtractor.BuildCategoryText(input.ExpenseCategories);
 
                 var start = new ProcessStartInfo("claude")
                 {

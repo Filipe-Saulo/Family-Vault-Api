@@ -16,6 +16,7 @@ namespace FamilyVaultApi.Data.Entities
         public int? SuggestedCategoryId { get; set; }
         public int? PossibleDuplicateTransactionId { get; set; }
         public ChargeStatus Status { get; set; }
+        public ChargeExtractionSource ExtractionSource { get; set; }
         public int? TransactionId { get; set; }
         public DateTime CreatedAt { get; set; }
 

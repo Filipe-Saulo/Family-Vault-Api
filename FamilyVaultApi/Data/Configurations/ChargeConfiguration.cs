@@ -34,6 +34,12 @@ namespace FamilyVaultApi.Data.Configurations
                 .IsRequired()
                 .HasMaxLength(20);
 
+            builder.Property(c => c.ExtractionSource)
+                .HasColumnName("extraction_source")
+                .HasConversion<string>()
+                .IsRequired()
+                .HasMaxLength(20);
+
             builder.Property(c => c.TransactionId).HasColumnName("transaction_id");
 
             builder.Property(c => c.CreatedAt)

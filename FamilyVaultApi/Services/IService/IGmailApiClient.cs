@@ -22,6 +22,10 @@ namespace FamilyVaultApi.Services.IService
 
         // Conteúdo do anexo pelo partId (o attachmentId muda a cada leitura da mensagem)
         Task<byte[]> GetAttachmentAsync(string accessToken, string messageId, string partId, CancellationToken cancellationToken);
+
+        // Texto do corpo da mensagem: a parte text/plain ou, sem ela, a text/html sem as tags. null se não houver
+        // corpo de texto. Mensagem apagada lança GmailMessageNotFoundException.
+        Task<string?> GetMessageBodyAsync(string accessToken, string messageId, CancellationToken cancellationToken);
     }
 
     public class GmailAuthorization

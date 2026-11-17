@@ -231,6 +231,12 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("datetime(6)")
                         .HasColumnName("due_date");
 
+                    b.Property<string>("ExtractionSource")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("extraction_source");
+
                     b.Property<int>("InboundDocumentId")
                         .HasColumnType("int")
                         .HasColumnName("inbound_document_id");

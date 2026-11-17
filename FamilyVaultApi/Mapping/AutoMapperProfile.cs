@@ -75,7 +75,8 @@ namespace FamilyVaultApi.Mapping
             CreateMap<Charge, ChargeResponseDto>()
                 .ForMember(d => d.DocumentId, opt => opt.MapFrom(src => src.InboundDocumentId))
                 .ForMember(d => d.Source, opt => opt.MapFrom(src => src.InboundDocument.Source.ToString()))
-                .ForMember(d => d.Status, opt => opt.MapFrom(src => src.Status.ToString()));
+                .ForMember(d => d.Status, opt => opt.MapFrom(src => src.Status.ToString()))
+                .ForMember(d => d.ExtractionSource, opt => opt.MapFrom(src => src.ExtractionSource.ToString()));
 
             CreateMap<InboundDocument, ChargeFailureResponseDto>()
                 .ForMember(d => d.DocumentId, opt => opt.MapFrom(src => src.InboundDocumentId))

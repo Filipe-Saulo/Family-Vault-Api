@@ -164,6 +164,7 @@ namespace FamilyVaultApi.IntegrationTests.Http
             charge.TransactionId.Should().Be(transaction.TransactionId);
             charge.Issuer.Should().Be("Banco X");
             charge.Amount.Should().Be(512.30m);
+            charge.ExtractionSource.Should().Be("Manual");
 
             var document = await GetDocumentAsync(documentId);
             document.Status.Should().Be(InboundDocumentStatus.Done);
@@ -270,6 +271,57 @@ namespace FamilyVaultApi.IntegrationTests.Http
 
             (await ChargesAsync(user)).Should().ContainSingle(c => c.Description == second);
             (await DocumentsAsync(userId)).Should().OnlyContain(d => d.Status == InboundDocumentStatus.Done);
+        }
+
+        // ---------- Gmail: corpo do e-mail antes de pedir a senha ----------
+
+        [Fact]
+        public async Task Gmail_ProtectedPdfWithChargeInEmailBody_ShouldCreateChargeReadFromTheBody()
+        {
+            var (userId, user) = await _api.NewUserClientAsync();
+            var refreshToken = NewToken();
+            var pdfMarker = NewMarker();
+            var bodyMarker = NewMarker();
+            Extractor.Returns(bodyMarker, Charge(bodyMarker));
+            Gmail.AddMessage(refreshToken, new FakeGmailApiClient.FakeMessage("m-" + bodyMarker, "fatura@nio.test", DateTime.UtcNow.AddDays(-1),
+                [("2", TestPdfs.Create(pdfMarker, userPassword: Password), 1000)], Body: $"Sua fatura {bodyMarker}: R$ 210,00"));
+
+            await ConnectAsync(user, refreshToken, "pessoa@exemplo.test");
+            await ProcessScansAsync();
+            await ProcessDocumentsAsync();
+
+            var charge = (await ChargesAsync(user)).Single();
+            charge.Description.Should().Be(bodyMarker);
+            charge.Status.Should().Be("PendingReview");
+            charge.ExtractionSource.Should().Be("EmailBody");
+            Extractor.Calls(bodyMarker).Single().ContentType.Should().Be("text/plain");
+            Extractor.CallsFor(pdfMarker).Should().Be(0, "o PDF protegido não foi aberto");
+            (await DocumentsAsync(userId)).Single().Status.Should().Be(InboundDocumentStatus.Done);
+            (await FailuresAsync(user)).Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task Gmail_ProtectedPdfWithoutChargeInEmailBody_ShouldWaitForPassword()
+        {
+            var (userId, user) = await _api.NewUserClientAsync();
+            var refreshToken = NewToken();
+            var pdfMarker = NewMarker();
+            Extractor.Returns(pdfMarker, Charge(pdfMarker));
+            Gmail.AddMessage(refreshToken, new FakeGmailApiClient.FakeMessage("m-" + pdfMarker, "fatura@itau.test", DateTime.UtcNow.AddDays(-1),
+                [("2", TestPdfs.Create(pdfMarker, userPassword: Password), 1000)], Body: "Sua fatura está no anexo."));
+
+            await ConnectAsync(user, refreshToken, "pessoa@exemplo.test");
+            await ProcessScansAsync();
+            await ProcessDocumentsAsync();
+
+            var waiting = (await DocumentsAsync(userId)).Single();
+            waiting.Status.Should().Be(InboundDocumentStatus.PasswordRequired);
+            (await FailuresAsync(user)).Single().Status.Should().Be("PasswordRequired");
+
+            // Informar a senha continua disponível e a conta sai do PDF
+            (await SubmitPasswordAsync(user, waiting.InboundDocumentId, Password)).StatusCode.Should().Be(HttpStatusCode.Accepted);
+            await ProcessDocumentsAsync();
+            (await ChargesAsync(user)).Single().ExtractionSource.Should().Be("Document");
         }
 
         // ---------- Helpers ----------
@@ -411,7 +463,7 @@ namespace FamilyVaultApi.IntegrationTests.Http
             string Status, int? PasswordAttemptsRemaining);
 
         private sealed record ChargeData(int ChargeId, int DocumentId, string? Issuer, string? Description, decimal? Amount,
-            string Status, int? TransactionId);
+            string Status, int? TransactionId, string ExtractionSource);
 
         private sealed record TransactionData(int TransactionId, decimal Amount, string UserId, DateTime TransactionDate);
     }

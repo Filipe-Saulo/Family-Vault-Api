@@ -38,6 +38,8 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<int> RequeueStuckDocumentsAsync(DateTime startedBefore, int maxAttempts);
         Task<List<ChargeCategoryOption>> GetExpenseCategoriesAsync(string userId);
         Task<bool> UserHasChargeWithBarcodeAsync(string userId, string barcode);
+        // Outro anexo do mesmo e-mail já virou conta, pelo arquivo ou pelo corpo (ExternalId com o prefixo da mensagem)
+        Task<bool> MessageHasChargeAsync(string userId, string messagePrefix);
         Task<int?> FindPossibleDuplicateTransactionIdAsync(string userId, decimal amount, DateTime dueDate);
 
         // PDF com senha
