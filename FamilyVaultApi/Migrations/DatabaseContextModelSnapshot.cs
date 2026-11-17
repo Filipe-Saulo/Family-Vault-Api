@@ -529,6 +529,16 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("gmail_scan_id");
 
+                    b.Property<int>("PasswordAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("password_attempts");
+
+                    b.Property<DateTime?>("PasswordRequiredAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("password_required_at");
+
                     b.Property<DateTime?>("ProcessingStartedAt")
                         .HasColumnType("datetime(6)")
                         .HasColumnName("processing_started_at");
@@ -576,6 +586,50 @@ namespace FamilyVaultApi.Migrations
                         .HasDatabaseName("idx_inbound_documents_user_external");
 
                     b.ToTable("inbound_documents", (string)null);
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.PdfSenderPassword", b =>
+                {
+                    b.Property<int>("PdfSenderPasswordId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("pdf_sender_password_id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("PdfSenderPasswordId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("PasswordEncrypted")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("password_encrypted");
+
+                    b.Property<string>("Sender")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("varchar(254)")
+                        .HasColumnName("sender");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("varchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("PdfSenderPasswordId");
+
+                    b.HasIndex("UserId", "Sender")
+                        .IsUnique()
+                        .HasDatabaseName("idx_pdf_sender_passwords_user_sender");
+
+                    b.ToTable("pdf_sender_passwords", (string)null);
                 });
 
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.PersonalAccessToken", b =>
@@ -1335,6 +1389,18 @@ namespace FamilyVaultApi.Migrations
                         .HasConstraintName("fk_inbound_documents_user");
 
                     b.Navigation("GmailScan");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.PdfSenderPassword", b =>
+                {
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_pdf_sender_passwords_user");
 
                     b.Navigation("User");
                 });

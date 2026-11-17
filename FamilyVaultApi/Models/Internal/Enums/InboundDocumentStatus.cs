@@ -5,6 +5,8 @@ namespace FamilyVaultApi.Models.Internal.Enums
         Pending,
         Processing,
         Done,
-        Failed
+        Failed,
+        // PDF com senha: espera a pessoa informar a senha ou o valor
+        PasswordRequired
     }
 }

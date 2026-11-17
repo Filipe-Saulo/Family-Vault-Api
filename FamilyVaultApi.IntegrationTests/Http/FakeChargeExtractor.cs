@@ -43,7 +43,9 @@ namespace FamilyVaultApi.IntegrationTests.Http
             return Task.FromResult(new ChargeExtractionResult { IsCharge = false });
         }
 
+        // Nos bytes ou, num PDF real (o aberto pela senha), no conteúdo descomprimido das páginas
         private static bool Contains(byte[] content, string marker) =>
-            Encoding.Latin1.GetString(content).Contains(marker, StringComparison.Ordinal);
+            Encoding.Latin1.GetString(content).Contains(marker, StringComparison.Ordinal)
+            || (content.AsSpan().StartsWith("%PDF"u8) && TestPdfs.ReadPageContent(content).Contains(marker, StringComparison.Ordinal));
     }
 }
