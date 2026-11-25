@@ -13,7 +13,8 @@ namespace FamilyVaultApi.IntegrationTests.Http
         private readonly ConcurrentBag<string> _revokeCalls = new();
         private readonly ConcurrentBag<string> _queries = new();
 
-        public sealed record FakeMessage(string Id, string? Sender, DateTime ReceivedAt, List<(string PartId, byte[] Content, long Size)> Pdfs);
+        public sealed record FakeMessage(string Id, string? Sender, DateTime ReceivedAt, List<(string PartId, byte[] Content, long Size)> Pdfs,
+            string? Body = null);
 
         // O próximo callback com este code autoriza a conta com este refresh token
         public void AddAuthorization(string code, string refreshToken, string email, bool hasGmailScope = true) =>
@@ -81,6 +82,9 @@ namespace FamilyVaultApi.IntegrationTests.Http
             var pdf = Find(accessToken, messageId).Pdfs.FirstOrDefault(p => p.PartId == partId);
             return pdf.Content == null ? throw new GmailMessageNotFoundException() : Task.FromResult(pdf.Content);
         }
+
+        public Task<string?> GetMessageBodyAsync(string accessToken, string messageId, CancellationToken cancellationToken) =>
+            Task.FromResult(Find(accessToken, messageId).Body);
 
         private List<FakeMessage> Mailbox(string accessToken) =>
             _mailboxes.GetOrAdd(accessToken["access:".Length..], _ => new List<FakeMessage>());

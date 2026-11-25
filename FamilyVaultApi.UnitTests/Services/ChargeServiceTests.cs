@@ -233,8 +233,8 @@ namespace FamilyVaultApi.UnitTests.Services
         public async Task GetFailuresAsync_PagingOutOfRange_ShouldNormalize()
         {
             PagedFilterDto? received = null;
-            _repository.Setup(r => r.GetFailuresAsync(UserId, It.IsAny<PagedFilterDto>()))
-                .Callback((string _, PagedFilterDto q) => received = q)
+            _repository.Setup(r => r.GetFailuresAsync(UserId, It.IsAny<PagedFilterDto>(), 5))
+                .Callback((string _, PagedFilterDto q, int _) => received = q)
                 .ReturnsAsync(new PagedResult<ChargeFailureResponseDto>());
 
             await _service.GetFailuresAsync(new PagedFilterDto { PageNumber = 0, PageSize = 1000 }, ClaimsPrincipalTestHelper.CreateUser(UserId));

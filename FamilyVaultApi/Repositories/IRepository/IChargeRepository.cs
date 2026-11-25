@@ -20,7 +20,7 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<(InboundDocumentSource Source, string? Sender)?> GetDocumentSenderAsync(int chargeId);
         Task<ChargeResponseDto?> GetResponseByIdAsync(int chargeId);
         Task<PagedResult<ChargeResponseDto>> GetAllAsync(string userId, ChargeQueryRequestDto query);
-        Task<PagedResult<ChargeFailureResponseDto>> GetFailuresAsync(string userId, PagedFilterDto query);
+        Task<PagedResult<ChargeFailureResponseDto>> GetFailuresAsync(string userId, PagedFilterDto query, int maxPasswordAttempts);
 
         // Confirmação e descarte (UPDATE condicional em status = PendingReview; false = outro já decidiu)
         Task ExecuteInTransactionAsync(Func<Task> action);
@@ -38,6 +38,18 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<int> RequeueStuckDocumentsAsync(DateTime startedBefore, int maxAttempts);
         Task<List<ChargeCategoryOption>> GetExpenseCategoriesAsync(string userId);
         Task<bool> UserHasChargeWithBarcodeAsync(string userId, string barcode);
+        // Outro anexo do mesmo e-mail já virou conta, pelo arquivo ou pelo corpo (ExternalId com o prefixo da mensagem)
+        Task<bool> MessageHasChargeAsync(string userId, string messagePrefix);
         Task<int?> FindPossibleDuplicateTransactionIdAsync(string userId, decimal amount, DateTime dueDate);
+        Task<int?> FindPossibleDuplicateChargeIdAsync(string userId, decimal amount, DateTime dueDate, string? sender, string? issuer, int windowDays);
+
+        // PDF com senha
+        Task MarkPasswordRequiredAsync(int documentId, string reason, DateTime now, bool keepContent);
+        Task<bool> TryReservePasswordAttemptAsync(int documentId, int maxAttempts);
+        Task<bool> TryRequeueUnlockedDocumentAsync(int documentId, byte[] unlockedContent);
+        Task<bool> TryCompleteManuallyAsync(int documentId, Charge charge);
+        Task<int> ExpirePasswordRequiredUploadsAsync(DateTime requiredBefore, string reason);
+        Task<string?> GetSenderPasswordAsync(string userId, string sender);
+        Task SaveSenderPasswordAsync(string userId, string sender, string passwordEncrypted, DateTime now);
     }
 }

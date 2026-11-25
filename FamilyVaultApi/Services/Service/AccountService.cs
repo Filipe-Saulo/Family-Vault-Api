@@ -292,8 +292,12 @@ namespace FamilyVaultApi.Services.Service
             if (isAdmin) permissionClaims.AddRange(await _identityService.GetRoleClaimsAsync("Administrator"));
             if (isUser) permissionClaims.AddRange(await _identityService.GetRoleClaimsAsync("User"));
 
-            // User cadastrado por e-mail não tem telefone
-            var identifier = isAdmin ? user.Email : user.PhoneNumber ?? user.Email;
+            // User cadastrado por e-mail não tem telefone; toda conta tem um dos dois
+            var identifier = (isAdmin ? user.Email : user.PhoneNumber ?? user.Email)
+                ?? throw new InvalidOperationException($"Usuário {user.Id} sem e-mail nem telefone.");
+            // O Identity grava o SecurityStamp na criação da conta
+            var securityStamp = user.SecurityStamp
+                ?? throw new InvalidOperationException($"Usuário {user.Id} sem SecurityStamp.");
 
             return _tokenService.GenerateAccessToken(new TokenClaimsData
             {
@@ -301,7 +305,7 @@ namespace FamilyVaultApi.Services.Service
                 Identifier = identifier,
                 IsAdmin = isAdmin,
                 IsUser = isUser,
-                SecurityStamp = user.SecurityStamp,
+                SecurityStamp = securityStamp,
                 UserClaims = userClaims,
                 PermissionClaims = permissionClaims
             });

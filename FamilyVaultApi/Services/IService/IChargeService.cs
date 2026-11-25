@@ -15,5 +15,9 @@ namespace FamilyVaultApi.Services.IService
         Task<PagedResult<ChargeFailureResponseDto>> GetFailuresAsync(PagedFilterDto query, ClaimsPrincipal userClaims);
         Task<TransactionResponseDto> ConfirmAsync(int id, ConfirmChargeDto dto, ClaimsPrincipal userClaims);
         Task DismissAsync(int id, DismissChargeDto? dto, ClaimsPrincipal userClaims);
+
+        // PDF com senha (documento PasswordRequired)
+        Task<ChargeUploadResponseDto> SubmitDocumentPasswordAsync(int documentId, SubmitDocumentPasswordDto dto, ClaimsPrincipal userClaims, CancellationToken cancellationToken);
+        Task<TransactionResponseDto> CreateManualChargeAsync(int documentId, ManualChargeDto dto, ClaimsPrincipal userClaims);
     }
 }

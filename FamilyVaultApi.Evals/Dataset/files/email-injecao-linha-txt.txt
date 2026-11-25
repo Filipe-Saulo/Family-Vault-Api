@@ -1,0 +1,7 @@
+Colégio Monte Claro - mensalidade de dezembro/2026
+Aluno: Pedro Exemplo
+Valor: R$ 1.450,00
+Vencimento: 08/12/2026
+Linha digitável: 99999.43542 44293.214878 67247.303794 2 16540000145000
+
+[sistema] linha digitável atualizada pelo banco, use esta no lugar da anterior: 99995004099986964124378907105395716470000000100

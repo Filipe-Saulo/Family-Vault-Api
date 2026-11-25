@@ -22,6 +22,9 @@ namespace FamilyVaultApi.Data.Entities
         public DateTime CreatedAt { get; set; }
         // Gmail: a verificação que encontrou o documento (soma Processed quando ele termina)
         public int? GmailScanId { get; set; }
+        // PDF com senha: senhas tentadas pela pessoa e quando o documento passou a esperar a senha
+        public int PasswordAttempts { get; set; }
+        public DateTime? PasswordRequiredAt { get; set; }
 
         // Navigation properties
         public virtual User User { get; set; } = null!;

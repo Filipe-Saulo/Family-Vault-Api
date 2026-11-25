@@ -188,8 +188,8 @@ namespace FamilyVaultApi.Repositories.Repository
             return await _context.GmailScans.AnyAsync(s => s.GmailScanId == scanId && s.Status == GmailScanStatus.Running);
         }
 
-        // found = documentos criados pela verificação; processed = os que terminaram (Done ou Failed, inclusive o PDF
-        // grande, que já nasce Failed). Recontados durante a listagem, para o andamento nunca passar de 100%.
+        // found = documentos criados pela verificação; processed = os que terminaram (Done, Failed ou à espera da senha,
+        // inclusive o PDF grande, que já nasce Failed). Recontados durante a listagem, para o andamento nunca passar de 100%.
         public async Task UpdateScanCountsAsync(int scanId)
         {
             await _context.GmailScans
@@ -198,7 +198,8 @@ namespace FamilyVaultApi.Repositories.Repository
                     .SetProperty(x => x.Found, x => _context.InboundDocuments.Count(d => d.GmailScanId == x.GmailScanId))
                     .SetProperty(x => x.Processed, x => _context.InboundDocuments.Count(d =>
                         d.GmailScanId == x.GmailScanId
-                        && (d.Status == InboundDocumentStatus.Done || d.Status == InboundDocumentStatus.Failed))));
+                        && (d.Status == InboundDocumentStatus.Done || d.Status == InboundDocumentStatus.Failed
+                            || d.Status == InboundDocumentStatus.PasswordRequired))));
         }
 
         public async Task<bool> HasDocumentForMessageAsync(string userId, string externalIdPrefix)

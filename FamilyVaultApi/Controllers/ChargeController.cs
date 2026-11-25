@@ -84,5 +84,21 @@ namespace FamilyVaultApi.Controllers
             await _chargeService.DismissAsync(id, dto, User);
             return NoContent();
         }
+
+        // PDF com senha: informar a senha (abre na hora e manda para a extração)
+        [HttpPost("documents/{documentId:int}/password")]
+        public async Task<ActionResult<ApiResponse<ChargeUploadResponseDto>>> SubmitDocumentPassword(int documentId, [FromBody] SubmitDocumentPasswordDto dto)
+        {
+            var result = await _chargeService.SubmitDocumentPasswordAsync(documentId, dto, User, HttpContext.RequestAborted);
+            return Accepted(new ApiResponse<ChargeUploadResponseDto>(StandardMessages.Get(HttpStatusCode.Accepted), result));
+        }
+
+        // PDF com senha: informar o valor (cria a despesa sem abrir o PDF)
+        [HttpPost("documents/{documentId:int}/manual")]
+        public async Task<ActionResult<ApiResponse<TransactionResponseDto>>> CreateManualCharge(int documentId, [FromBody] ManualChargeDto dto)
+        {
+            var result = await _chargeService.CreateManualChargeAsync(documentId, dto, User);
+            return StatusCode(StatusCodes.Status201Created, ApiResponse<TransactionResponseDto>.Created(result));
+        }
     }
 }

@@ -6,6 +6,22 @@ namespace FamilyVaultApi.Models.Internal
         public int MaxUploadBytes { get; set; } = 10485760;
         public ChargeDailyLimitOptions DailyLimits { get; set; } = new();
         public ChargeWorkerOptions Worker { get; set; } = new();
+        public ChargePasswordRequiredOptions PasswordRequired { get; set; } = new();
+        public ChargeDuplicateOptions DuplicateCharges { get; set; } = new();
+    }
+
+    public class ChargeDuplicateOptions
+    {
+        // Dias de diferença entre vencimentos para duas charges pendentes do mesmo remetente serem possíveis duplicatas
+        public int DueDateWindowDays { get; set; } = 10;
+    }
+
+    public class ChargePasswordRequiredOptions
+    {
+        // Senhas erradas aceitas por documento; depois disso só resta informar o valor
+        public int MaxAttempts { get; set; } = 5;
+        // Dias que o upload com senha guarda o arquivo esperando a senha
+        public int RetentionDays { get; set; } = 7;
     }
 
     public class ChargeDailyLimitOptions

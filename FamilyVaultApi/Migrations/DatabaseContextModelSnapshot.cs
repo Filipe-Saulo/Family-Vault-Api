@@ -231,6 +231,12 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("datetime(6)")
                         .HasColumnName("due_date");
 
+                    b.Property<string>("ExtractionSource")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("extraction_source");
+
                     b.Property<int>("InboundDocumentId")
                         .HasColumnType("int")
                         .HasColumnName("inbound_document_id");
@@ -239,6 +245,10 @@ namespace FamilyVaultApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("varchar(200)")
                         .HasColumnName("issuer");
+
+                    b.Property<int?>("PossibleDuplicateChargeId")
+                        .HasColumnType("int")
+                        .HasColumnName("possible_duplicate_charge_id");
 
                     b.Property<int?>("PossibleDuplicateTransactionId")
                         .HasColumnType("int")
@@ -269,6 +279,9 @@ namespace FamilyVaultApi.Migrations
                     b.HasIndex("InboundDocumentId")
                         .IsUnique()
                         .HasDatabaseName("idx_charges_inbound_document");
+
+                    b.HasIndex("PossibleDuplicateChargeId")
+                        .HasDatabaseName("idx_charges_possible_duplicate_charge");
 
                     b.HasIndex("PossibleDuplicateTransactionId");
 
@@ -529,6 +542,16 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("gmail_scan_id");
 
+                    b.Property<int>("PasswordAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("password_attempts");
+
+                    b.Property<DateTime?>("PasswordRequiredAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("password_required_at");
+
                     b.Property<DateTime?>("ProcessingStartedAt")
                         .HasColumnType("datetime(6)")
                         .HasColumnName("processing_started_at");
@@ -576,6 +599,50 @@ namespace FamilyVaultApi.Migrations
                         .HasDatabaseName("idx_inbound_documents_user_external");
 
                     b.ToTable("inbound_documents", (string)null);
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.PdfSenderPassword", b =>
+                {
+                    b.Property<int>("PdfSenderPasswordId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("pdf_sender_password_id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("PdfSenderPasswordId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("PasswordEncrypted")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("password_encrypted");
+
+                    b.Property<string>("Sender")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("varchar(254)")
+                        .HasColumnName("sender");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("varchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("PdfSenderPasswordId");
+
+                    b.HasIndex("UserId", "Sender")
+                        .IsUnique()
+                        .HasDatabaseName("idx_pdf_sender_passwords_user_sender");
+
+                    b.ToTable("pdf_sender_passwords", (string)null);
                 });
 
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.PersonalAccessToken", b =>
@@ -1235,6 +1302,12 @@ namespace FamilyVaultApi.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_charges_inbound_document");
 
+                    b.HasOne("FamilyVaultApi.Data.Entities.Charge", "PossibleDuplicateCharge")
+                        .WithMany()
+                        .HasForeignKey("PossibleDuplicateChargeId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_charges_possible_duplicate_charge");
+
                     b.HasOne("FamilyVaultApi.Data.Entities.Transaction", "PossibleDuplicateTransaction")
                         .WithMany()
                         .HasForeignKey("PossibleDuplicateTransactionId")
@@ -1261,6 +1334,8 @@ namespace FamilyVaultApi.Migrations
                         .HasConstraintName("fk_charges_user");
 
                     b.Navigation("InboundDocument");
+
+                    b.Navigation("PossibleDuplicateCharge");
 
                     b.Navigation("PossibleDuplicateTransaction");
 
@@ -1335,6 +1410,18 @@ namespace FamilyVaultApi.Migrations
                         .HasConstraintName("fk_inbound_documents_user");
 
                     b.Navigation("GmailScan");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FamilyVaultApi.Data.Entities.PdfSenderPassword", b =>
+                {
+                    b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_pdf_sender_passwords_user");
 
                     b.Navigation("User");
                 });

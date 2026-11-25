@@ -11,6 +11,10 @@ namespace FamilyVaultApi.Services.Service
     {
         private readonly IConfiguration _configuration;
 
+        // O Program.cs recusa subir sem a chave; aqui ela só falta se a configuração mudou depois
+        private string JwtKey => _configuration["JwtSettings:Key"]
+            ?? throw new InvalidOperationException("JwtSettings:Key não configurada.");
+
         public TokenService(IConfiguration configuration)
         {
             _configuration = configuration;
@@ -18,7 +22,7 @@ namespace FamilyVaultApi.Services.Service
 
         public string GenerateAccessToken(TokenClaimsData data)
         {
-            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"]));
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
             // User cadastrado por e-mail tem o e-mail como identificador
@@ -66,7 +70,7 @@ namespace FamilyVaultApi.Services.Service
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = _configuration["JwtSettings:Issuer"],
                 ValidAudience = _configuration["JwtSettings:Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"])),
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtKey)),
                 RoleClaimType = ClaimTypes.Role
             };
 

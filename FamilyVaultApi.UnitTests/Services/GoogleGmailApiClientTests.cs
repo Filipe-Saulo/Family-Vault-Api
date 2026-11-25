@@ -2,6 +2,7 @@ using FamilyVaultApi.Models.Internal;
 using FamilyVaultApi.Services.IService;
 using FamilyVaultApi.Services.Service;
 using FluentAssertions;
+using Google.Apis.Gmail.v1.Data;
 using Google.Apis.Http;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
@@ -160,6 +161,60 @@ namespace FamilyVaultApi.UnitTests.Services
 
             await act.Should().ThrowAsync<GmailMessageNotFoundException>();
         }
+
+        [Fact]
+        public async Task GetMessageBodyAsync_ShouldReturnThePlainTextPartWithoutAttachments()
+        {
+            _handler.On(HttpMethod.Get, "/gmail/v1/users/me/messages/m1", HttpStatusCode.OK, MessageJson);
+
+            var body = await _client.GetMessageBodyAsync("at-1", "m1", CancellationToken.None);
+
+            body.Should().Be("texto");
+        }
+
+        [Fact]
+        public void ExtractBodyText_WithoutPlainText_ShouldUseTheHtmlWithoutTagsScriptsAndStyles()
+        {
+            var html = "<html><head><title>x</title></head><body><style>p{color:red}</style><script>alert(1)</script>" +
+                       "<p>Fatura&nbsp;Nio</p><p>Valor: R$&nbsp;99,90<br>Vencimento: 20/11/2026</p></body></html>";
+            var payload = new MessagePart
+            {
+                MimeType = "multipart/alternative",
+                Parts = [new MessagePart { MimeType = "text/html", Filename = "", Body = new MessagePartBody { Data = Base64Url(Encoding.UTF8.GetBytes(html)) } }]
+            };
+
+            var text = GoogleGmailApiClient.ExtractBodyText(payload);
+
+            text.Should().Be("Fatura Nio\nValor: R$ 99,90\nVencimento: 20/11/2026");
+        }
+
+        [Fact]
+        public void ExtractBodyText_WithLatin1Charset_ShouldDecodeAccents()
+        {
+            var payload = new MessagePart
+            {
+                MimeType = "text/plain",
+                Filename = "",
+                Headers = [new MessagePartHeader { Name = "Content-Type", Value = "text/plain; charset=\"ISO-8859-1\"" }],
+                Body = new MessagePartBody { Data = Base64Url(Encoding.Latin1.GetBytes("Cobrança de março")) }
+            };
+
+            GoogleGmailApiClient.ExtractBodyText(payload).Should().Be("Cobrança de março");
+        }
+
+        [Fact]
+        public void ExtractBodyText_OnlyAttachments_ShouldReturnNull()
+        {
+            var payload = new MessagePart
+            {
+                MimeType = "multipart/mixed",
+                Parts = [new MessagePart { MimeType = "text/plain", Filename = "leia.txt", Body = new MessagePartBody { Data = Base64Url("x"u8.ToArray()) } }]
+            };
+
+            GoogleGmailApiClient.ExtractBodyText(payload).Should().BeNull();
+        }
+
+        private static string Base64Url(byte[] data) => Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
         [Fact]
         public async Task RevokeAsync_ShouldCallTheGoogleRevokeEndpoint()

@@ -23,7 +23,9 @@ namespace FamilyVaultApi.IntegrationTests
         public const string AppReturnUrl = "familyvault://gmail";
         public const string WebReturnUrl = "http://localhost:5173/gmail";
 
-        private readonly SqliteConnection _connection;
+        // Conexão só para manter o banco em memória vivo; cada DbContext abre a própria
+        private readonly SqliteConnection _keepAlive;
+        private readonly string _connectionString;
         private readonly string? _adminEmail;
         private readonly string? _adminPassword;
         private readonly IDictionary<string, string?>? _settings;
@@ -43,9 +45,11 @@ namespace FamilyVaultApi.IntegrationTests
             _adminEmail = adminEmail;
             _adminPassword = adminPassword;
 
-            // O banco em memória vive enquanto a conexão estiver aberta
-            _connection = new SqliteConnection("DataSource=:memory:");
-            _connection.Open();
+            // Banco em memória nomeado e compartilhado: vive enquanto _keepAlive estiver aberta, e requisições
+            // simultâneas usam conexões próprias (uma SqliteConnection não pode ser usada por duas threads ao mesmo tempo)
+            _connectionString = $"DataSource=file:{Guid.NewGuid():N}?mode=memory&cache=shared";
+            _keepAlive = new SqliteConnection(_connectionString);
+            _keepAlive.Open();
 
             using var context = new DatabaseContext(BuildOptions());
             context.Database.EnsureCreated();
@@ -59,7 +63,7 @@ namespace FamilyVaultApi.IntegrationTests
             builder.UseSetting("AdminSeed:Email", _adminEmail ?? string.Empty);
             builder.UseSetting("AdminSeed:Password", _adminPassword ?? string.Empty);
 
-            // O worker concorreria com os requests na conexão única do SQLite; os testes processam à mão.
+            // O worker concorreria com os requests no SQLite; os testes processam à mão.
             // Limites do dia folgados por padrão (usuários de teste são reaproveitados); o teste do limite sobrescreve.
             builder.UseSetting("Charges:Worker:Enabled", "false");
             builder.UseSetting("Charges:Worker:RetryDelaySeconds", "0");
@@ -81,7 +85,7 @@ namespace FamilyVaultApi.IntegrationTests
                 // configureDatabase: ajuste do teste por cima do SQLite (ex.: execution strategy e interceptor de falha)
                 services.AddDbContext<DatabaseContext>(options =>
                 {
-                    options.UseSqlite(_connection);
+                    options.UseSqlite(_connectionString);
                     _configureDatabase?.Invoke(options);
                 });
                 services.RemoveAll<IChargeExtractor>();
@@ -109,10 +113,10 @@ namespace FamilyVaultApi.IntegrationTests
         {
             base.Dispose(disposing);
             if (disposing)
-                _connection.Dispose();
+                _keepAlive.Dispose();
         }
 
         private DbContextOptions<DatabaseContext> BuildOptions() =>
-            new DbContextOptionsBuilder<DatabaseContext>().UseSqlite(_connection).Options;
+            new DbContextOptionsBuilder<DatabaseContext>().UseSqlite(_connectionString).Options;
     }
 }

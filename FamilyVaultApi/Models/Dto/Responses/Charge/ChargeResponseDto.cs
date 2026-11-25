@@ -12,7 +12,10 @@ namespace FamilyVaultApi.Models.Dto.Responses.Charge
         public string? Barcode { get; set; }
         public int? SuggestedCategoryId { get; set; }
         public int? PossibleDuplicateTransactionId { get; set; }
+        public int? PossibleDuplicateChargeId { get; set; }
         public string Status { get; set; }
+        // Document, EmailBody (lida do corpo do e-mail) ou Manual
+        public string ExtractionSource { get; set; }
         public int? TransactionId { get; set; }
         public DateTime CreatedAt { get; set; }
     }

@@ -21,7 +21,7 @@ flowchart LR
 - Standard error **envelope** (`ApiResponse<T>` with `traceId`), also for 401, 403 and 429
 - **Rate limiting** on auth endpoints
 - Read-only **MCP server** at `/mcp`: an AI client (Claude Code, MCP Inspector) queries your own finances with a personal token that only works there
-- **277 unit tests** on the Service layer and **integration tests** (WebApplicationFactory + in-memory SQLite) through the real HTTP pipeline, run by CI on every push, with **73.1% line coverage**
+- **613 unit tests** on the Service layer and **177 integration tests** (WebApplicationFactory + in-memory SQLite) through the real HTTP pipeline, run by CI on every push, with **88.9% line coverage**
 
 ---
 
@@ -121,6 +121,8 @@ dotnet ef database update
 ```bash
 dotnet run --project FamilyVaultApi
 ```
+
+This uses the `http` profile (`http://localhost:5090`), which is what the mobile app needs: under the `https` profile (`--launch-profile https`) `UseHttpsRedirection` answers the app's `http://` calls with a 307 to `https://localhost:7072`, which the device does not follow, and the app shows "Sem conexão com o servidor". With the `http` profile, start the web panel with its proxy pointed at it: `VITE_API_PROXY_TARGET=http://localhost:5090` (its default is `https://localhost:7072`).
 
 6. Access Swagger UI (Development environment only):
 
@@ -257,7 +259,7 @@ dotnet test FamilyVaultApi.IntegrationTests
 
 ### Coverage
 
-**Line coverage: 73.1%** (branch 70.1%), unit and integration tests combined, measured on the `FamilyVaultApi` project without the generated `Migrations/`. CI prints the report in the job summary; the number above is updated by hand from it. To measure locally (needs `dotnet tool install -g dotnet-reportgenerator-globaltool`; delete `coverage/` first so old runs don't mix in):
+**Line coverage: 88.9%** (branch 82.7%), unit and integration tests combined, measured on the `FamilyVaultApi` project without the generated `Migrations/`. CI prints the report in the job summary; the number above is updated by hand from it. To measure locally (needs `dotnet tool install -g dotnet-reportgenerator-globaltool`; delete `coverage/` first so old runs don't mix in):
 
 ```bash
 rm -rf coverage

@@ -5,6 +5,7 @@ using FamilyVaultApi.Models.Internal.Enums;
 using FamilyVaultApi.Repositories.IRepository;
 using FamilyVaultApi.Services.IService;
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -14,7 +15,11 @@ namespace FamilyVaultApi.Services.Service
     public class ChargeDocumentProcessor
     {
         private const int CandidatesPerCall = 10;
-        private const string PasswordProtectedReason = "O PDF está protegido por senha.";
+        // Corpo de e-mail maior que isso é cortado antes de ir para a IA (faturas trazem o resumo no começo)
+        public const int EmailBodyMaxChars = 20_000;
+        public const string EmailBodyContentType = "text/plain";
+        public const string PasswordProtectedReason = "O PDF está protegido por senha.";
+        private const string PasswordExpiredReason = "O prazo para informar a senha terminou.";
         private const string GenericFailureReason = "Não foi possível processar o documento.";
         private const string UnreadableReason = "O documento está ilegível.";
         private const string EmailGoneReason = "O e-mail não está mais disponível no Gmail.";
@@ -26,9 +31,11 @@ namespace FamilyVaultApi.Services.Service
         private readonly ILogger<ChargeDocumentProcessor> _logger;
         // Nulo quando o Gmail não está configurado: documento do Gmail volta à fila sem gastar tentativa
         private readonly GmailDocumentFetcher? _gmailFetcher;
+        // Nulo sem o Gmail configurado: a senha lembrada por remetente só existe para documento do Gmail
+        private readonly GmailTokenProtector? _protector;
 
         public ChargeDocumentProcessor(IChargeRepository repository, IChargeExtractor extractor, IOptions<ChargeProcessingOptions> options, TimeProvider timeProvider, ILogger<ChargeDocumentProcessor> logger,
-            GmailDocumentFetcher? gmailFetcher = null)
+            GmailDocumentFetcher? gmailFetcher = null, GmailTokenProtector? protector = null)
         {
             _repository = repository;
             _extractor = extractor;
@@ -36,6 +43,17 @@ namespace FamilyVaultApi.Services.Service
             _timeProvider = timeProvider;
             _logger = logger;
             _gmailFetcher = gmailFetcher;
+            _protector = protector;
+        }
+
+        // Upload que esperou a senha além do prazo vira Failed e perde o arquivo
+        public async Task ExpirePasswordRequiredAsync()
+        {
+            var requiredBefore = _timeProvider.GetUtcNow().UtcDateTime.AddDays(-_options.PasswordRequired.RetentionDays);
+            var expired = await _repository.ExpirePasswordRequiredUploadsAsync(requiredBefore, PasswordExpiredReason);
+
+            if (expired > 0)
+                _logger.LogInformation("{Count} upload(s) com senha passaram do prazo e terminaram com falha.", expired);
         }
 
         // Devolve o que ficou preso em Processing (reinício no meio do processamento)
@@ -69,7 +87,8 @@ namespace FamilyVaultApi.Services.Service
                 if (document == null)
                     continue;
 
-                if (document.Source == InboundDocumentSource.Gmail)
+                // Gmail com o PDF já aberto pela senha informada: não baixa de novo
+                if (document.Source == InboundDocumentSource.Gmail && document.TemporaryContent == null)
                 {
                     if (_gmailFetcher == null)
                     {
@@ -135,8 +154,20 @@ namespace FamilyVaultApi.Services.Service
         {
             if (contentType == "application/pdf" && IsPasswordProtected(content))
             {
-                await FailAsync(document, PasswordProtectedReason);
-                return;
+                var unlocked = await TryUnlockWithoutAskingAsync(document, content);
+                if (unlocked == null)
+                {
+                    // Gmail: antes de pedir a senha, tenta a conta pelo corpo do e-mail
+                    if (document.Source == InboundDocumentSource.Gmail && await TryCompleteFromEmailBodyAsync(document, now, cancellationToken))
+                        return;
+
+                    // O upload guarda o arquivo até a senha (ou o prazo); o do Gmail é baixado de novo quando ela chegar
+                    _logger.LogInformation("Documento {DocumentId} espera a senha do PDF.", document.InboundDocumentId);
+                    await _repository.MarkPasswordRequiredAsync(document.InboundDocumentId, PasswordProtectedReason, now, keepContent: document.Source == InboundDocumentSource.Upload);
+                    return;
+                }
+
+                content = unlocked;
             }
 
             var categories = await _repository.GetExpenseCategoriesAsync(document.UserId);
@@ -175,6 +206,88 @@ namespace FamilyVaultApi.Services.Service
                 return;
             }
 
+            await CompleteWithChargeAsync(document, result, categories, ChargeExtractionSource.Document, now);
+        }
+
+        // PDF protegido do Gmail sem senha que abra: a IA lê o corpo do e-mail. true = o documento foi tratado
+        // (conta criada, ou devolvido à fila por falha passageira da IA); false = segue para PasswordRequired.
+        // O corpo é texto de terceiros: passa pelas mesmas validações da extração do PDF e nunca vai para o log.
+        private async Task<bool> TryCompleteFromEmailBodyAsync(InboundDocument document, DateTime now, CancellationToken cancellationToken)
+        {
+            if (_gmailFetcher == null)
+                return false;
+
+            // O corpo descreve a fatura do e-mail: se outro anexo dele já virou conta (aberto ou pelo corpo), este espera a senha
+            var messagePrefix = GmailDocumentFetcher.MessagePrefixOf(document.ExternalId);
+            if (messagePrefix == null || await _repository.MessageHasChargeAsync(document.UserId, messagePrefix))
+                return false;
+
+            string? body;
+            try
+            {
+                body = await _gmailFetcher.FetchBodyAsync(document, cancellationToken);
+            }
+            catch (GmailAccessRevokedException)
+            {
+                // Acesso retirado entre o download e a leitura do corpo: espera a reconexão sem gastar tentativa
+                await _repository.ReleaseDocumentAsync(document.InboundDocumentId);
+                return true;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // O corpo é um atalho: sem ele, a pessoa ainda informa a senha ou o valor
+                _logger.LogWarning("Não foi possível ler o corpo do e-mail do documento {DocumentId}: {ExceptionType}.", document.InboundDocumentId, ex.GetType().Name);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(body))
+                return false;
+
+            if (body.Length > EmailBodyMaxChars)
+                body = body[..(char.IsHighSurrogate(body[EmailBodyMaxChars - 1]) ? EmailBodyMaxChars - 1 : EmailBodyMaxChars)];
+
+            var categories = await _repository.GetExpenseCategoriesAsync(document.UserId);
+
+            ChargeExtractionResult result;
+            try
+            {
+                result = await _extractor.ExtractAsync(new ChargeExtractionInput
+                {
+                    Content = Encoding.UTF8.GetBytes(body),
+                    ContentType = EmailBodyContentType,
+                    ExpenseCategories = categories
+                }, cancellationToken);
+            }
+            catch (ChargeExtractionException)
+            {
+                // Corpo ilegível ou recusado: não é falha do documento, o PDF ainda pode ser aberto com a senha
+                return false;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError("Falha ao interpretar o corpo do e-mail do documento {DocumentId} (tentativa {Attempt}): {ExceptionType}.", document.InboundDocumentId, document.Attempts, ex.GetType().Name);
+
+                if (document.Attempts >= _options.Worker.MaxAttempts)
+                    return false;
+
+                await _repository.ReturnDocumentToPendingAsync(document.InboundDocumentId);
+                return true;
+            }
+
+            // Só vira conta com valor e vencimento válidos; senão a pessoa informa a senha
+            if (!result.IsCharge
+                || ChargeValidator.ValidateAmount(result.Amount) == null
+                || ChargeValidator.ValidateDueDate(result.DueDate, document.ReceivedAt) == null)
+                return false;
+
+            _logger.LogInformation("Documento {DocumentId} lido pelo corpo do e-mail.", document.InboundDocumentId);
+            await CompleteWithChargeAsync(document, result, categories, ChargeExtractionSource.EmailBody, now);
+            return true;
+        }
+
+        private async Task CompleteWithChargeAsync(InboundDocument document, ChargeExtractionResult result, IReadOnlyList<ChargeCategoryOption> categories,
+            ChargeExtractionSource source, DateTime now)
+        {
             var barcode = ChargeValidator.NormalizeBarcode(result.Barcode);
             if (barcode != null && await _repository.UserHasChargeWithBarcodeAsync(document.UserId, barcode))
             {
@@ -194,6 +307,11 @@ namespace FamilyVaultApi.Services.Service
             if (amount.HasValue && dueDate.HasValue)
                 possibleDuplicateId = await _repository.FindPossibleDuplicateTransactionIdAsync(document.UserId, amount.Value, dueDate.Value);
 
+            int? possibleDuplicateChargeId = null;
+            if (amount.HasValue && dueDate.HasValue)
+                possibleDuplicateChargeId = await _repository.FindPossibleDuplicateChargeIdAsync(document.UserId, amount.Value, dueDate.Value,
+                    document.Sender, ChargeValidator.NormalizeText(result.Issuer, 200), _options.DuplicateCharges.DueDateWindowDays);
+
             var charge = new Charge
             {
                 UserId = document.UserId,
@@ -204,11 +322,41 @@ namespace FamilyVaultApi.Services.Service
                 Barcode = barcode,
                 SuggestedCategoryId = suggestedCategoryId,
                 PossibleDuplicateTransactionId = possibleDuplicateId,
+                PossibleDuplicateChargeId = possibleDuplicateChargeId,
                 Status = ChargeStatus.PendingReview,
+                ExtractionSource = source,
                 CreatedAt = now
             };
 
             await _repository.CompleteDocumentAsync(document.InboundDocumentId, InboundDocumentStatus.Done, null, charge);
+        }
+
+        // Senha vazia (PDF só com senha de dono) e, no Gmail, a senha lembrada do remetente; null = precisa pedir
+        private async Task<byte[]?> TryUnlockWithoutAskingAsync(InboundDocument document, byte[] content)
+        {
+            var unlocked = PdfUnlocker.TryUnlock(content, string.Empty);
+            if (unlocked != null)
+                return unlocked;
+
+            if (document.Source != InboundDocumentSource.Gmail || _protector == null || string.IsNullOrEmpty(document.Sender))
+                return null;
+
+            var saved = await _repository.GetSenderPasswordAsync(document.UserId, document.Sender);
+            if (saved == null)
+                return null;
+
+            string password;
+            try
+            {
+                password = _protector.Unprotect(saved);
+            }
+            catch (Exception ex) when (ex is CryptographicException or FormatException)
+            {
+                // Chave trocada: a senha salva não serve mais; a pessoa informa de novo
+                return null;
+            }
+
+            return PdfUnlocker.TryUnlock(content, password);
         }
 
         private async Task FailAsync(InboundDocument document, string reason)

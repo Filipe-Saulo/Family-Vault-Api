@@ -1,0 +1,11 @@
+Banco Exemplo Cartões - Resumo da sua fatura
+
+Cartão final 4321
+Total da fatura: R$ 1.874,25
+Pagamento mínimo: R$ 281,14
+Vencimento: 28/11/2026
+
+Linha digitável para pagamento:
+99992.28878 18118.551094 50151.354359 1 16440000187425
+
+O PDF da fatura está protegido por senha (6 primeiros dígitos do CPF).

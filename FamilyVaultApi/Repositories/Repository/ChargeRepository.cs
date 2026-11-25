@@ -72,7 +72,9 @@ namespace FamilyVaultApi.Repositories.Repository
                     .SetProperty(d => d.FailureReason, (string?)null)
                     .SetProperty(d => d.ProcessingStartedAt, (DateTime?)null)
                     .SetProperty(d => d.TemporaryContent, content)
-                    .SetProperty(d => d.ContentType, contentType));
+                    .SetProperty(d => d.ContentType, contentType)
+                    .SetProperty(d => d.PasswordAttempts, 0)
+                    .SetProperty(d => d.PasswordRequiredAt, (DateTime?)null));
 
             return rows > 0;
         }
@@ -131,11 +133,13 @@ namespace FamilyVaultApi.Repositories.Repository
             };
         }
 
-        public async Task<PagedResult<ChargeFailureResponseDto>> GetFailuresAsync(string userId, PagedFilterDto query)
+        // Failed e PasswordRequired: os dois aparecem na lista de falhas do app
+        public async Task<PagedResult<ChargeFailureResponseDto>> GetFailuresAsync(string userId, PagedFilterDto query, int maxPasswordAttempts)
         {
             var q = _context.InboundDocuments
                 .AsNoTracking()
-                .Where(d => d.UserId == userId && d.Status == InboundDocumentStatus.Failed);
+                .Where(d => d.UserId == userId
+                    && (d.Status == InboundDocumentStatus.Failed || d.Status == InboundDocumentStatus.PasswordRequired));
 
             var total = await q.CountAsync();
 
@@ -146,12 +150,19 @@ namespace FamilyVaultApi.Repositories.Repository
                 .Take(query.PageSize)
                 .ToListAsync();
 
+            var dtos = _mapper.Map<List<ChargeFailureResponseDto>>(items);
+            for (var i = 0; i < items.Count; i++)
+            {
+                if (items[i].Status == InboundDocumentStatus.PasswordRequired)
+                    dtos[i].PasswordAttemptsRemaining = Math.Max(0, maxPasswordAttempts - items[i].PasswordAttempts);
+            }
+
             return new PagedResult<ChargeFailureResponseDto>
             {
                 TotalCount = total,
                 PageNumber = query.PageNumber,
                 PageSize = query.PageSize,
-                Items = _mapper.Map<List<ChargeFailureResponseDto>>(items)
+                Items = dtos
             };
         }
 
@@ -212,7 +223,9 @@ namespace FamilyVaultApi.Repositories.Repository
             return await _context.InboundDocuments
                 .Where(d => d.Status == InboundDocumentStatus.Pending && !blockedUsers.Contains(d.UserId))
                 // Documento do Gmail só anda com a conexão ativa; desconectado ou revogado, espera a reconexão
+                // (o que já tem o PDF aberto pela senha informada não precisa do Gmail)
                 .Where(d => d.Source == InboundDocumentSource.Upload
+                    || d.TemporaryContent != null
                     || _context.GmailConnections.Any(c => c.UserId == d.UserId && c.Status == GmailConnectionStatus.Active))
                 // Quem voltou da tentativa anterior espera o intervalo antes da próxima
                 .Where(d => d.ProcessingStartedAt == null || d.ProcessingStartedAt <= retryReadyBefore)
@@ -273,6 +286,14 @@ namespace FamilyVaultApi.Repositories.Repository
             {
                 charge.InboundDocumentId = documentId;
                 _context.Charges.Add(charge);
+
+                // Marca a candidata no sentido contrário (se ainda não aponta para outra), na mesma transação
+                if (charge.PossibleDuplicateChargeId.HasValue)
+                {
+                    var other = await _context.Charges.FirstOrDefaultAsync(c => c.ChargeId == charge.PossibleDuplicateChargeId.Value);
+                    if (other != null && other.PossibleDuplicateChargeId == null)
+                        other.PossibleDuplicateCharge = charge;
+                }
             }
 
             await _context.SaveChangesAsync();
@@ -281,7 +302,7 @@ namespace FamilyVaultApi.Repositories.Repository
                 await UpdateScanProgressAsync(new List<int> { document.GmailScanId.Value });
         }
 
-        // processed da verificação = documentos dela que terminaram (Done ou Failed); recontado em vez de somado,
+        // processed da verificação = documentos dela que terminaram (Done, Failed ou à espera da senha); recontado em vez de somado,
         // para um documento terminado por caminhos diferentes não contar duas vezes
         private async Task UpdateScanProgressAsync(List<int> scanIds)
         {
@@ -289,7 +310,8 @@ namespace FamilyVaultApi.Repositories.Repository
                 .Where(s => scanIds.Contains(s.GmailScanId))
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Processed, x => _context.InboundDocuments.Count(d =>
                     d.GmailScanId == x.GmailScanId
-                    && (d.Status == InboundDocumentStatus.Done || d.Status == InboundDocumentStatus.Failed))));
+                    && (d.Status == InboundDocumentStatus.Done || d.Status == InboundDocumentStatus.Failed
+                        || d.Status == InboundDocumentStatus.PasswordRequired))));
         }
 
         // O que ficou preso em Processing volta a Pending; sem tentativas sobrando, termina como Failed
@@ -338,6 +360,11 @@ namespace FamilyVaultApi.Repositories.Repository
             return await _context.Charges.AnyAsync(c => c.UserId == userId && c.Barcode == barcode);
         }
 
+        public async Task<bool> MessageHasChargeAsync(string userId, string messagePrefix)
+        {
+            return await _context.Charges.AnyAsync(c => c.UserId == userId && c.InboundDocument.ExternalId.StartsWith(messagePrefix));
+        }
+
         // Despesa do usuário com o mesmo valor e data a até 3 dias do vencimento; a de data mais próxima
         public async Task<int?> FindPossibleDuplicateTransactionIdAsync(string userId, decimal amount, DateTime dueDate)
         {
@@ -359,6 +386,160 @@ namespace FamilyVaultApi.Repositories.Repository
                 .ThenBy(t => t.TransactionId)
                 .Select(t => (int?)t.TransactionId)
                 .FirstOrDefault();
+        }
+
+        // Outra charge PendingReview do usuário, mesmo valor, vencimento a até windowDays dias e mesmo remetente: sender igual (os dois
+        // preenchidos) ou, se um dos dois não tem sender (upload), emissor igual sem diferenciar maiúsculas. A de vencimento mais próximo
+        public async Task<int?> FindPossibleDuplicateChargeIdAsync(string userId, decimal amount, DateTime dueDate, string? sender, string? issuer, int windowDays)
+        {
+            var from = dueDate.Date.AddDays(-windowDays);
+            var to = dueDate.Date.AddDays(windowDays + 1);
+            var issuerLower = string.IsNullOrWhiteSpace(issuer) ? null : issuer.ToLower();
+
+            var candidates = await _context.Charges
+                .AsNoTracking()
+                .Where(c => c.UserId == userId
+                    && c.Status == ChargeStatus.PendingReview
+                    && c.Amount == amount
+                    && c.DueDate >= from
+                    && c.DueDate < to
+                    && ((sender != null && c.InboundDocument.Sender == sender)
+                        || ((sender == null || c.InboundDocument.Sender == null)
+                            && issuerLower != null && c.Issuer != null && c.Issuer.ToLower() == issuerLower)))
+                .Select(c => new { c.ChargeId, c.DueDate })
+                .ToListAsync();
+
+            return candidates
+                .OrderBy(c => Math.Abs((c.DueDate!.Value.Date - dueDate.Date).TotalDays))
+                .ThenBy(c => c.ChargeId)
+                .Select(c => (int?)c.ChargeId)
+                .FirstOrDefault();
+        }
+
+        // O documento passa a esperar a senha. O upload mantém o arquivo (é a única cópia); o do Gmail é baixado de novo.
+        public async Task MarkPasswordRequiredAsync(int documentId, string reason, DateTime now, bool keepContent)
+        {
+            var document = await _context.InboundDocuments.FirstAsync(d => d.InboundDocumentId == documentId);
+
+            document.Status = InboundDocumentStatus.PasswordRequired;
+            document.FailureReason = reason;
+            document.PasswordAttempts = 0;
+            document.PasswordRequiredAt = now;
+            if (!keepContent)
+                document.TemporaryContent = null;
+
+            await _context.SaveChangesAsync();
+
+            if (document.GmailScanId.HasValue)
+                await UpdateScanProgressAsync(new List<int> { document.GmailScanId.Value });
+        }
+
+        // Gasta uma tentativa antes de testar a senha; false = no limite ou o documento não espera mais senha
+        public async Task<bool> TryReservePasswordAttemptAsync(int documentId, int maxAttempts)
+        {
+            var rows = await _context.InboundDocuments
+                .Where(d => d.InboundDocumentId == documentId
+                    && d.Status == InboundDocumentStatus.PasswordRequired
+                    && d.PasswordAttempts < maxAttempts)
+                .ExecuteUpdateAsync(s => s.SetProperty(d => d.PasswordAttempts, d => d.PasswordAttempts + 1));
+
+            return rows > 0;
+        }
+
+        // Senha certa: o PDF aberto vai para a fila da extração (apagado quando ela terminar)
+        public async Task<bool> TryRequeueUnlockedDocumentAsync(int documentId, byte[] unlockedContent)
+        {
+            var rows = await _context.InboundDocuments
+                .Where(d => d.InboundDocumentId == documentId && d.Status == InboundDocumentStatus.PasswordRequired)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(d => d.Status, InboundDocumentStatus.Pending)
+                    .SetProperty(d => d.Attempts, 0)
+                    .SetProperty(d => d.FailureReason, (string?)null)
+                    .SetProperty(d => d.ProcessingStartedAt, (DateTime?)null)
+                    .SetProperty(d => d.TemporaryContent, unlockedContent)
+                    .SetProperty(d => d.ContentType, "application/pdf"));
+
+            return rows > 0;
+        }
+
+        // Informar o valor: o documento termina Done com a charge já confirmada. Roda dentro de ExecuteInTransactionAsync;
+        // false = o documento não espera mais senha (outro pedido tratou antes)
+        public async Task<bool> TryCompleteManuallyAsync(int documentId, Charge charge)
+        {
+            var rows = await _context.InboundDocuments
+                .Where(d => d.InboundDocumentId == documentId && d.Status == InboundDocumentStatus.PasswordRequired)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(d => d.Status, InboundDocumentStatus.Done)
+                    .SetProperty(d => d.FailureReason, (string?)null)
+                    .SetProperty(d => d.TemporaryContent, (byte[]?)null));
+
+            if (rows == 0)
+                return false;
+
+            charge.InboundDocumentId = documentId;
+            _context.Charges.Add(charge);
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        // Upload que esperou a senha além do prazo: falha e apaga o arquivo
+        public async Task<int> ExpirePasswordRequiredUploadsAsync(DateTime requiredBefore, string reason)
+        {
+            return await _context.InboundDocuments
+                .Where(d => d.Status == InboundDocumentStatus.PasswordRequired
+                    && d.Source == InboundDocumentSource.Upload
+                    && d.PasswordRequiredAt < requiredBefore)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(d => d.Status, InboundDocumentStatus.Failed)
+                    .SetProperty(d => d.FailureReason, reason)
+                    .SetProperty(d => d.TemporaryContent, (byte[]?)null));
+        }
+
+        public async Task<string?> GetSenderPasswordAsync(string userId, string sender)
+        {
+            return await _context.PdfSenderPasswords
+                .Where(p => p.UserId == userId && p.Sender == sender)
+                .Select(p => p.PasswordEncrypted)
+                .FirstOrDefaultAsync();
+        }
+
+        // Grava ou troca a senha lembrada do remetente
+        public async Task SaveSenderPasswordAsync(string userId, string sender, string passwordEncrypted, DateTime now)
+        {
+            var updated = await _context.PdfSenderPasswords
+                .Where(p => p.UserId == userId && p.Sender == sender)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(p => p.PasswordEncrypted, passwordEncrypted)
+                    .SetProperty(p => p.UpdatedAt, now));
+
+            if (updated > 0)
+                return;
+
+            var entity = new PdfSenderPassword
+            {
+                UserId = userId,
+                Sender = sender,
+                PasswordEncrypted = passwordEncrypted,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            _context.PdfSenderPasswords.Add(entity);
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Outro pedido gravou o mesmo remetente ao mesmo tempo: fica a senha desta vez
+                _context.Entry(entity).State = EntityState.Detached;
+                await _context.PdfSenderPasswords
+                    .Where(p => p.UserId == userId && p.Sender == sender)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(p => p.PasswordEncrypted, passwordEncrypted)
+                        .SetProperty(p => p.UpdatedAt, now));
+            }
         }
     }
 }
