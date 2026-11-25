@@ -134,7 +134,7 @@ namespace FamilyVaultApi.Services.Service
             if (dto == null)
                 throw new ArgumentNullException(nameof(dto));
 
-            if (userClaims == null || !userClaims.Identity.IsAuthenticated)
+            if (userClaims?.Identity?.IsAuthenticated != true)
                 throw new UnauthorizedAccessException("Usuário não autenticado.");
 
             await EnsureCanModifyUserAsync(userId, userClaims);
@@ -144,7 +144,7 @@ namespace FamilyVaultApi.Services.Service
 
         public async Task DeleteUserAsync(string userId, ClaimsPrincipal userClaims)
         {
-            if (userClaims == null || !userClaims.Identity.IsAuthenticated)
+            if (userClaims?.Identity?.IsAuthenticated != true)
                 throw new UnauthorizedAccessException("Usuário não autenticado.");
 
             await EnsureCanModifyUserAsync(userId, userClaims);
