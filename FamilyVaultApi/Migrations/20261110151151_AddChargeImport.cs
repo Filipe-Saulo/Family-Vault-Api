@@ -36,7 +36,7 @@ namespace FamilyVaultApi.Migrations
                     content_type = table.Column<string>(type: "varchar(50)", maxLength: 50, nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     processing_started_at = table.Column<DateTime>(type: "datetime(6)", nullable: true),
-                    created_at = table.Column<DateTime>(type: "datetime(6)", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                    created_at = table.Column<DateTime>(type: "datetime(6)", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP(6)")
                 },
                 constraints: table =>
                 {
@@ -72,7 +72,7 @@ namespace FamilyVaultApi.Migrations
                     status = table.Column<string>(type: "varchar(20)", maxLength: 20, nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     transaction_id = table.Column<int>(type: "int", nullable: true),
-                    created_at = table.Column<DateTime>(type: "datetime(6)", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                    created_at = table.Column<DateTime>(type: "datetime(6)", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP(6)")
                 },
                 constraints: table =>
                 {
