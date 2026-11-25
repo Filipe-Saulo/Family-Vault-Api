@@ -83,6 +83,80 @@ namespace FamilyVaultApi.Services.Service
             await _userManager.SetLockoutEndDateAsync(user, null);
         }
 
+        public async Task<bool> HasPasswordAsync(User user)
+        {
+            return await _userManager.HasPasswordAsync(user);
+        }
+
+        public async Task<User?> FindByExternalLoginAsync(string provider, string providerKey)
+        {
+            return await _userManager.FindByLoginAsync(provider, providerKey);
+        }
+
+        public async Task<User?> FindByEmailAsync(string email)
+        {
+            // Quem se cadastrou por e-mail tem o e-mail no UserName e no Email; o Email cobre os dois casos.
+            // O e-mail não é único no Identity (RequireUniqueEmail desligado): com mais de uma conta, não há qual vincular
+            var normalized = _userManager.NormalizeEmail(email);
+            var users = await _userManager.Users.Where(u => u.NormalizedEmail == normalized).Take(2).ToListAsync();
+            if (users.Count > 1)
+                throw new ConflictException("Este e-mail está em mais de uma conta. Entre com telefone ou e-mail e senha.");
+
+            return users.SingleOrDefault();
+        }
+
+        public async Task LinkExternalLoginAsync(User user, string provider, string providerKey)
+        {
+            var result = await _userManager.AddLoginAsync(user, new UserLoginInfo(provider, providerKey, provider));
+            if (!result.Succeeded)
+                throw new InvalidOperationException($"Falha ao vincular o login {provider}: {string.Join(", ", result.Errors.Select(e => e.Code))}");
+
+            if (!user.EmailConfirmed)
+            {
+                user.EmailConfirmed = true;
+                await _userManager.UpdateAsync(user);
+            }
+        }
+
+        public async Task<User> RegisterExternalUserAsync(string email, string firstName, string lastName, string provider, string providerKey)
+        {
+            var user = new User
+            {
+                UserName = email,
+                Email = email,
+                EmailConfirmed = true,
+                FirstName = firstName,
+                LastName = lastName,
+                FullName = $"{firstName} {lastName}".Trim(),
+                RegisteredAt = DateTime.UtcNow,
+                LastLogin = DateTime.UtcNow,
+                Age = 0
+            };
+
+            // Sem senha: a primeira é definida pelo "esqueci a senha" por e-mail
+            var created = await _userManager.CreateAsync(user);
+            if (!created.Succeeded)
+                throw new InvalidOperationException($"Falha ao criar a conta {provider}: {string.Join(", ", created.Errors.Select(e => e.Code))}");
+
+            try
+            {
+                var linked = await _userManager.AddLoginAsync(user, new UserLoginInfo(provider, providerKey, provider));
+                if (!linked.Succeeded)
+                    throw new InvalidOperationException($"Falha ao vincular o login {provider}: {string.Join(", ", linked.Errors.Select(e => e.Code))}");
+
+                var role = await _userManager.AddToRoleAsync(user, "User");
+                if (!role.Succeeded)
+                    throw new InvalidOperationException($"Falha ao atribuir o papel User: {string.Join(", ", role.Errors.Select(e => e.Code))}");
+            }
+            catch (Exception)
+            {
+                await _userManager.DeleteAsync(user);
+                throw;
+            }
+
+            return user;
+        }
+
         public async Task<bool> CheckPasswordAsync(User user, string password)
         {
             return await _userManager.CheckPasswordAsync(user, password);

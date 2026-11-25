@@ -149,6 +149,9 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddSingleton<IPhoneNumberService, PhoneNumberService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
+// Login com Google (só no app): client IDs em user-secrets ou GoogleSignIn__ClientIds__0...; sem eles, a rota responde 503
+builder.Services.Configure<GoogleSignInOptions>(builder.Configuration.GetSection("GoogleSignIn"));
+builder.Services.AddSingleton<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.Configure<VerificationSendLimitOptions>(builder.Configuration.GetSection("VerificationCode:SendLimit"));
 builder.Services.AddScoped<IVerificationSendLimiter, DbVerificationSendLimiter>();
@@ -347,6 +350,9 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+if (!app.Services.GetRequiredService<IGoogleIdTokenValidator>().IsConfigured)
+    app.Logger.LogWarning("GoogleSignIn:ClientIds vazio: o login com Google (POST /api/app/google) responde 503.");
 
 await app.SeedAdministratorAsync();
 

@@ -27,6 +27,7 @@ namespace FamilyVaultApi.UnitTests.Services
         public PasswordServiceTests()
         {
             SetUpPhone(valid: true);
+            _identityMock.Setup(x => x.HasPasswordAsync(It.IsAny<User>())).ReturnsAsync(true);
             _limiterMock.Setup(x => x.TryAcquireAsync(It.IsAny<VerificationChannel>(), Phone)).ReturnsAsync(true);
         }
 
@@ -350,6 +351,20 @@ namespace FamilyVaultApi.UnitTests.Services
 
         private static ChangePasswordRequestDto Change(string password = "Nova@123", string confirm = "Nova@123") =>
             new() { CurrentPassword = "Atual@123", Password = password, PasswordConfirm = confirm };
+
+        [Fact]
+        public async Task ChangePasswordAsync_WhenAccountHasNoPassword_ShouldPointToForgotWithoutCountingLockout()
+        {
+            _identityMock.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(_user);
+            _identityMock.Setup(x => x.HasPasswordAsync(_user)).ReturnsAsync(false);
+
+            Func<Task> act = () => CreateService().ChangePasswordAsync(Change(), ClaimsPrincipalTestHelper.CreateUser("user-1"));
+
+            (await act.Should().ThrowAsync<BadRequestException>()).Which.Message
+                .Should().Be("Esta conta ainda não tem senha. Use \"Esqueci a senha\" para criar uma.");
+            _identityMock.Verify(x => x.ChangePasswordAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            _identityMock.Verify(x => x.AccessFailedAsync(It.IsAny<User>()), Times.Never);
+        }
 
         [Fact]
         public async Task ChangePasswordAsync_WhenPasswordsDoNotMatch_ShouldThrowBadRequest()

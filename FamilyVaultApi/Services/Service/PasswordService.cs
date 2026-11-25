@@ -82,6 +82,10 @@ namespace FamilyVaultApi.Services.Service
             if (await _identityService.IsLockedOutAsync(user))
                 throw new BadRequestException("Senha atual incorreta.");
 
+            // Conta criada pelo Google ainda sem senha: a primeira vem do "esqueci a senha", e o erro não conta no lockout
+            if (!await _identityService.HasPasswordAsync(user))
+                throw new BadRequestException("Esta conta ainda não tem senha. Use \"Esqueci a senha\" para criar uma.");
+
             var errors = (await _identityService.ChangePasswordAsync(user, dto.CurrentPassword, dto.Password)).ToList();
             if (errors.Any(e => e.Code == "PasswordMismatch"))
                 await _identityService.AccessFailedAsync(user);
