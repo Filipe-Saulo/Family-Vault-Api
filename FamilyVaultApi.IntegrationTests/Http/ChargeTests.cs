@@ -574,6 +574,46 @@ namespace FamilyVaultApi.IntegrationTests.Http
         }
 
         [Fact]
+        public async Task RequeueStuck_ProcessingWithAttemptsAtMax_ShouldFail_AndBelowMaxShouldReturnToPending()
+        {
+            var (_, user) = await _api.UserClientAsync(0);
+            await ProcessAllAsync();
+            var exhaustedMarker = NewMarker();
+            var retryMarker = NewMarker();
+            Extractor.Returns(retryMarker, new ChargeExtractionResult { IsCharge = false });
+            var exhaustedId = await UploadDocumentAsync(user, PdfBytes(exhaustedMarker));
+            var retryId = await UploadDocumentAsync(user, PdfBytes(retryMarker));
+
+            // Simula a API reiniciada no meio do processamento: os dois presos em Processing além do StuckAfterMinutes (10)
+            await using (var scope = _api.Factory.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<DatabaseContext>();
+                var startedAt = DateTime.UtcNow.AddMinutes(-11);
+                foreach (var (documentId, attempts) in new[] { (exhaustedId, 3), (retryId, 2) })
+                    await db.InboundDocuments
+                        .Where(d => d.InboundDocumentId == documentId)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(d => d.Status, InboundDocumentStatus.Processing)
+                            .SetProperty(d => d.Attempts, attempts)
+                            .SetProperty(d => d.ProcessingStartedAt, startedAt));
+            }
+
+            using (var scope = _api.Factory.Services.CreateScope())
+                await scope.ServiceProvider.GetRequiredService<ChargeDocumentProcessor>().RequeueStuckAsync();
+
+            var exhausted = await GetDocumentAsync(exhaustedId);
+            exhausted.Status.Should().Be(InboundDocumentStatus.Failed);
+            exhausted.FailureReason.Should().Be("Não foi possível processar o documento.");
+            exhausted.TemporaryContent.Should().BeNull();
+            (await FailuresAsync(user)).Should().Contain(f => f.DocumentId == exhaustedId);
+            (await GetDocumentAsync(retryId)).Status.Should().Be(InboundDocumentStatus.Pending);
+
+            await ProcessAllAsync();
+            (await GetDocumentAsync(retryId)).Status.Should().Be(InboundDocumentStatus.Done);
+            Extractor.CallsFor(exhaustedMarker).Should().Be(0);
+        }
+
+        [Fact]
         public async Task Process_WhenExtractorReturnsInvalidFields_ShouldKeepThemNull()
         {
             var (_, user) = await _api.UserClientAsync(0);
