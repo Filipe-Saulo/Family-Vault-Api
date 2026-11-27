@@ -18,7 +18,7 @@ namespace FamilyVaultApi.Data.Configurations
             builder.Property(t => t.UserId)
                 .HasColumnName("user_id")
                 .IsRequired()
-                .HasMaxLength(255);
+                .HasMaxLength(450); // mesmo tamanho de tb_user.user_id: o SQL Server exige na FK
 
             builder.Property(t => t.Name)
                 .HasColumnName("name")

@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FamilyVaultApi.Migrations
 {
     [DbContext(typeof(DatabaseContext))]
-    [Migration("20261127102928_InitialCreate")]
+    [Migration("20261127104342_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -57,8 +57,8 @@ namespace FamilyVaultApi.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("UserId")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.HasKey("CategoryId");
@@ -689,8 +689,8 @@ namespace FamilyVaultApi.Migrations
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.HasKey("PersonalAccessTokenId");
@@ -748,8 +748,8 @@ namespace FamilyVaultApi.Migrations
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.HasKey("RefreshTokenId");

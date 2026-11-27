@@ -156,7 +156,7 @@ namespace FamilyVaultApi.Migrations
                     category_purpose_id = table.Column<int>(type: "int", nullable: false),
                     created_at = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     updated_at = table.Column<DateTime>(type: "datetime2", nullable: true, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    user_id = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: true)
+                    user_id = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -300,7 +300,7 @@ namespace FamilyVaultApi.Migrations
                 {
                     personal_access_token_id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    user_id = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
+                    user_id = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: false),
                     name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     token_hash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
                     scope = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
@@ -328,7 +328,7 @@ namespace FamilyVaultApi.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     token_hash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
                     family_id = table.Column<string>(type: "nvarchar(36)", maxLength: 36, nullable: false),
-                    user_id = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
+                    user_id = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: false),
                     client = table.Column<int>(type: "int", nullable: false),
                     created_at = table.Column<DateTime>(type: "datetime2", nullable: false),
                     expires_at = table.Column<DateTime>(type: "datetime2", nullable: false),

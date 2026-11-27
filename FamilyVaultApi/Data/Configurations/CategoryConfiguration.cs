@@ -33,7 +33,7 @@ namespace FamilyVaultApi.Data.Configurations
             // Nulo = categoria global (criada por Administrator)
             builder.Property(c => c.UserId)
                 .HasColumnName("user_id")
-                .HasMaxLength(255);
+                .HasMaxLength(450); // mesmo tamanho de tb_user.user_id: o SQL Server exige na FK
 
             // Indexes
             builder.HasIndex(c => c.UserId).HasDatabaseName("idx_categories_user");
