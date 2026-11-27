@@ -16,6 +16,7 @@ namespace FamilyVaultApi.Repositories.IRepository
         Task<bool> IsLastAdministratorAsync(string userId);
         Task<bool> IsAdministratorAsync(string userId);
         Task<List<PermissionCode>> GetPermissionsAsync(string userId);
+        Task<bool> IsDemoUserAsync(string userId);
         Task GrantPermissionAsync(string userId, PermissionCode permission);
         Task RevokePermissionAsync(string userId, PermissionCode permission);
     }

@@ -13,6 +13,9 @@ namespace FamilyVaultApi.Data.Entities
         public DateTime? UpdatedAt { get; set; }
         public DateTime LastLogin { get; set; }
 
+        // Usuário da demonstração pública, criado pelo DemoSeeder
+        public bool IsDemo { get; set; }
+
         public virtual ICollection<Transaction> Transactions { get; set; }
 
     }

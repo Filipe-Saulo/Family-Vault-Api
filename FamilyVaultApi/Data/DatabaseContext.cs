@@ -65,6 +65,7 @@ namespace FamilyVaultApi.Data
             modelBuilder.Entity<User>().ToTable("tb_user");
 
             modelBuilder.Entity<User>().Property(u => u.Id).HasColumnName("user_id");
+            modelBuilder.Entity<User>().Property(u => u.IsDemo).HasColumnName("is_demo");
 
             modelBuilder.Entity<IdentityRole>().ToTable("tb_roles");
             modelBuilder.Entity<IdentityUserRole<string>>().ToTable("tb_user_roles");

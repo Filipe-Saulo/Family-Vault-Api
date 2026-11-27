@@ -949,6 +949,10 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("full_name");
 
+                    b.Property<bool>("IsDemo")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_demo");
+
                     b.Property<DateTime>("LastLogin")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")

@@ -37,6 +37,9 @@ namespace FamilyVaultApi.Repositories.Repository
 
             IQueryable<User> usersQuery = _context.Users;
 
+            if (query.DemoOnly)
+                usersQuery = usersQuery.Where(u => u.IsDemo);
+
             if (!string.IsNullOrWhiteSpace(query.FirstName))
                 usersQuery = usersQuery.Where(u => u.FirstName.Contains(query.FirstName));
 
@@ -222,6 +225,11 @@ namespace FamilyVaultApi.Repositories.Repository
                 throw new NotFoundException("Usuário", userId);
 
             return await _userManager.IsInRoleAsync(user, "Administrator");
+        }
+
+        public async Task<bool> IsDemoUserAsync(string userId)
+        {
+            return await _context.Users.AnyAsync(u => u.Id == userId && u.IsDemo);
         }
 
         public async Task<List<PermissionCode>> GetPermissionsAsync(string userId)

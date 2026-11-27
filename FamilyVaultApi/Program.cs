@@ -357,6 +357,8 @@ if (!app.Services.GetRequiredService<IGoogleIdTokenValidator>().IsConfigured)
     app.Logger.LogWarning("GoogleSignIn:ClientIds vazio: o login com Google (POST /api/app/google) responde 503.");
 
 await app.SeedAdministratorAsync();
+// Depois do administrador real: a conta demo não pode ser o primeiro Administrator
+await app.SeedDemoAsync();
 
 // Antes do limite por IP e do redirecionamento https, que dependem do IP e do esquema reais
 if (forwardedHeadersEnabled)
@@ -391,6 +393,8 @@ app.Use(async (context, next) =>
 });
 
 app.UseAuthentication();
+// Conta demo: só leitura (precisa do usuário autenticado)
+app.UseMiddleware<DemoReadOnlyMiddleware>();
 app.UseAuthorization();
 // Depois da autorização: a partição do limite usa o token que a policy do /mcp autenticou
 app.UseRateLimiter();

@@ -68,6 +68,30 @@ namespace FamilyVaultApi.UnitTests.Services
             query.UserId.Should().Be("user-1");
         }
 
+        [Fact]
+        public async Task GetSummaryAsync_AsDemo_ShouldRestrictToDemoUsers()
+        {
+            _repositoryMock
+                .Setup(x => x.GetSummaryAsync(It.IsAny<DashboardQueryRequestDto>()))
+                .ReturnsAsync(new DashboardSummaryDto());
+
+            await _service.GetSummaryAsync(new DashboardQueryRequestDto(), ClaimsPrincipalTestHelper.CreateDemoAdmin());
+
+            _repositoryMock.Verify(x => x.GetSummaryAsync(It.Is<DashboardQueryRequestDto>(q => q.DemoOnly)), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetSummaryAsync_AsAdmin_ShouldNotRestrictToDemoUsers()
+        {
+            _repositoryMock
+                .Setup(x => x.GetSummaryAsync(It.IsAny<DashboardQueryRequestDto>()))
+                .ReturnsAsync(new DashboardSummaryDto());
+
+            await _service.GetSummaryAsync(new DashboardQueryRequestDto(), ClaimsPrincipalTestHelper.CreateAdmin());
+
+            _repositoryMock.Verify(x => x.GetSummaryAsync(It.Is<DashboardQueryRequestDto>(q => !q.DemoOnly)), Times.Once);
+        }
+
         // ── GetSummaryAsync — default date range ────────────────────────────
 
         [Fact]

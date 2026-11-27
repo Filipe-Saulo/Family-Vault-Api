@@ -161,6 +161,33 @@ namespace FamilyVaultApi.UnitTests.Services
         }
 
         [Fact]
+        public async Task ForgotPasswordAsync_WhenAccountIsDemo_ShouldNotGenerateNorSendAndNotThrow()
+        {
+            _user.IsDemo = true;
+            SetUpUser(_user);
+            _identityMock.Setup(x => x.IsLockedOutAsync(_user)).ReturnsAsync(false);
+
+            Func<Task> act = () => CreateService().ForgotPasswordAsync(Forgot());
+
+            await act.Should().NotThrowAsync();
+            _identityMock.Verify(x => x.GeneratePasswordResetCodeAsync(It.IsAny<User>(), It.IsAny<VerificationChannel>()), Times.Never);
+            _senderMock.Verify(x => x.SendAsync(It.IsAny<VerificationCodeMessage>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ResetPasswordAsync_WhenAccountIsDemo_ShouldThrowGenericBadRequestWithoutVerifyingCode()
+        {
+            _user.IsDemo = true;
+            SetUpUser(_user);
+            _identityMock.Setup(x => x.IsLockedOutAsync(_user)).ReturnsAsync(false);
+
+            Func<Task> act = () => CreateService().ResetPasswordAsync(Reset());
+
+            (await act.Should().ThrowAsync<BadRequestException>()).WithMessage(InvalidCodeMessage);
+            _identityMock.Verify(x => x.VerifyPasswordResetCodeAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<VerificationChannel>()), Times.Never);
+        }
+
+        [Fact]
         public async Task ResetPasswordAsync_WhenAccountIsLockedOut_ShouldThrowGenericBadRequestWithoutVerifyingCode()
         {
             SetUpUser(_user);

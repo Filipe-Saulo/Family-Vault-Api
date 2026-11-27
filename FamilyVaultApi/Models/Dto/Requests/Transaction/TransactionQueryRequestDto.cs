@@ -1,4 +1,6 @@
-﻿namespace FamilyVaultApi.Models.Dto.Requests.Transaction
+﻿using Microsoft.AspNetCore.Mvc.ModelBinding;
+
+namespace FamilyVaultApi.Models.Dto.Requests.Transaction
 {
     public class TransactionQueryRequestDto : PagedFilterDto
     {
@@ -14,5 +16,9 @@
 
         public decimal? MinAmount { get; set; }
         public decimal? MaxAmount { get; set; }
+
+        // Preenchido pelo service para a conta demo; não vem da query string
+        [BindNever]
+        public bool DemoOnly { get; set; }
     }
 }

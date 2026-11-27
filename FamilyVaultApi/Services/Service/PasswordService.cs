@@ -32,7 +32,8 @@ namespace FamilyVaultApi.Services.Service
 
             // Responde igual para telefone/e-mail inválido, conta inexistente ou bloqueada, para não revelar quais contas existem
             var (destination, user) = await FindAccountAsync(channel, channel == VerificationChannel.Email ? dto.Email : dto.Phone);
-            if (user == null || await _identityService.IsLockedOutAsync(user))
+            // A conta demo tem destinos fictícios: nunca recebe código
+            if (user == null || user.IsDemo || await _identityService.IsLockedOutAsync(user))
                 return;
 
             if (!await _sendLimiter.TryAcquireAsync(channel, destination!))
@@ -50,7 +51,7 @@ namespace FamilyVaultApi.Services.Service
                 throw new BadRequestException("A senha e a confirmação de senha não coincidem.");
 
             var (_, user) = await FindAccountAsync(channel, channel == VerificationChannel.Email ? dto.Email : dto.Phone);
-            if (user == null || await _identityService.IsLockedOutAsync(user))
+            if (user == null || user.IsDemo || await _identityService.IsLockedOutAsync(user))
                 throw new BadRequestException("Código inválido ou expirado.");
 
             if (!await _identityService.VerifyPasswordResetCodeAsync(user, dto.Code, channel))
