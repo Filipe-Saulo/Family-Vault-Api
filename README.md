@@ -8,7 +8,7 @@
 flowchart LR
     App["App (Expo)"] -->|"/app/*"| API["API (.NET 8)"]
     Web["Web (React)"] -->|"/web/*"| API
-    API --> DB[("MySQL")]
+    API --> DB[("SQL Server")]
 ```
 
 ## Highlights
@@ -31,23 +31,23 @@ flowchart LR
 - JWT authentication with ASP.NET Core Identity
 - Role-based authorization (`Administrator`, `User`) plus permission-claim policies (`ManageCategories`, `ManageTransactions`, `ManageTransactionTypes`, `ManageUsers`)
 - Financial dashboard with income/expense totals and a per-category, per-type breakdown
-- Entity Framework Core with MySQL (Pomelo)
+- Entity Framework Core with SQL Server (Azure SQL in production, SQL Server in Docker locally)
 - AutoMapper for DTO mapping
 - Serilog logging (console sink + request logging)
 - Swagger / OpenAPI documentation
-- Health check for MySQL at `/health`
+- Health checks: `/health` (database connectivity) and `/health/live` (process only, for container probes)
 - Rate limiting on auth endpoints (login, register, password forgot/reset, refresh token)
 - Automated test suite (xUnit) covering the Service layer, run on every push via CI
 - Multi-platform: web apps and mobile apps
 
 ## Architecture
 
-Strict layered architecture: `Controller → Service → Repository → EF Core (MySQL)`. Controllers only translate HTTP ↔ DTOs and delegate; business rules and authorization decisions (role, permission-claim, or resource-ownership checks) live in the Service layer; Repositories only persist/query.
+Strict layered architecture: `Controller → Service → Repository → EF Core (SQL Server)`. Controllers only translate HTTP ↔ DTOs and delegate; business rules and authorization decisions (role, permission-claim, or resource-ownership checks) live in the Service layer; Repositories only persist/query.
 
 ## Requirements
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
-- MySQL 8.x
+- [Docker](https://docs.docker.com/get-docker/) for the local SQL Server 2022 (`docker-compose.yml`)
 
 ## Getting Started
 
@@ -58,12 +58,19 @@ git clone <repo-url>
 cd FamilyVaultApi
 ```
 
-2. Configure connection string and JWT settings in `appsettings.json`:
+2. Start the local SQL Server and point the API at it. The `sa` password lives in `.env` (git-ignored; template in
+   `.env.example`), and the connection string in user-secrets, never in `appsettings.json`:
+
+```bash
+cp .env.example .env          # then set MSSQL_SA_PASSWORD (8+ chars, upper, lower, digit and symbol)
+docker compose up -d
+cd FamilyVaultApi
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost,1433;Database=FamilyVault;User Id=sa;Password=<same password>;TrustServerCertificate=True"
+```
+
+   JWT settings in `appsettings.json` (the key is not versioned, see below):
 
 ```json
-"ConnectionStrings": {
-  "DefaultConnection": "Server=localhost;Port=3306;Database=FamilyVault;User=root;Password=your_password;"
-},
 "JwtSettings": {
   "Issuer": "FamilyVaultApi",
   "Audience": "FamilyVaultApiClient",
@@ -110,10 +117,12 @@ dotnet user-secrets set "GoogleSignIn:ClientIds:0" "<web client id>.apps.googleu
 dotnet user-secrets set "GoogleSignIn:ClientIds:1" "<ios client id>.apps.googleusercontent.com"
 ```
 
-4. Apply database migrations:
+4. Apply database migrations (the API never migrates at startup). `dotnet ef` builds the context through
+   `Data/DesignTimeDbContextFactory.cs`, so it only needs the connection string (user-secrets or
+   `ConnectionStrings__DefaultConnection`), not the JWT key or the SMS/e-mail credentials:
 
 ```bash
-dotnet ef database update
+dotnet ef database update --project FamilyVaultApi
 ```
 
 5. Run the API:
@@ -241,7 +250,8 @@ Streamable HTTP, stateless, authenticated **only** by a personal token (`Authori
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/health` | MySQL connectivity check |
+| GET | `/health` | Database connectivity check |
+| GET | `/health/live` | Liveness only (no database), for container probes |
 
 ## Tests
 
@@ -251,7 +261,7 @@ The `FamilyVaultApi.UnitTests` project (xUnit + Moq + FluentAssertions + Bogus) 
 dotnet test FamilyVaultApi.UnitTests
 ```
 
-The `FamilyVaultApi.IntegrationTests` project boots the whole API with `WebApplicationFactory` in the `Testing` environment, swapping MySQL for an in-memory SQLite database (schema and seeded roles from `EnsureCreated`), and checks the startup admin seed (`Data/AdminSeeder.cs`) and the main flows over HTTP (`Http/`): login of the seeded admin, the `ApiResponse` envelope with `traceId` on 401/403, granting permissions (an unknown number answers 400), and category and transaction CRUD with the owner rule (a User never sees or changes another User's records). It needs no running database either.
+The `FamilyVaultApi.IntegrationTests` project boots the whole API with `WebApplicationFactory` in the `Testing` environment, swapping SQL Server for an in-memory SQLite database (schema and seeded roles from `EnsureCreated`), and checks the startup admin seed (`Data/AdminSeeder.cs`) and the main flows over HTTP (`Http/`): login of the seeded admin, the `ApiResponse` envelope with `traceId` on 401/403, granting permissions (an unknown number answers 400), and category and transaction CRUD with the owner rule (a User never sees or changes another User's records). It needs no running database either.
 
 ```bash
 dotnet test FamilyVaultApi.IntegrationTests
@@ -272,13 +282,33 @@ There is no lint step; `dotnet build` is the static check (also run by CI).
 
 ## CI/CD
 
-A GitHub Actions workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds the solution, runs the unit and integration tests with coverage collection and writes the coverage summary (ReportGenerator) to the job page on every push/PR to `main`. This is a deliberately minimal, demonstrative pipeline — since this project isn't deployed anywhere, there's no deploy step; it exists to show a basic automated build+test gate, which in a real-world scenario could be extended with deployment, integration tests against a real database, etc.
+A GitHub Actions workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push/PR to `main`:
+
+- `build-and-test`: builds the solution, runs the unit and integration tests with coverage and writes the coverage summary (ReportGenerator) to the job page.
+- `image`: builds the Docker image and smoke-tests it against a throwaway SQL Server 2022 (password generated in the run): applies the migrations with the image's `/app/efbundle`, starts the API as the non-root user and checks `/health/live` and `/health`. On push to `main` it pushes `ghcr.io/<owner>/family-vault-api:<sha>` and `:latest` to the GitHub Container Registry.
+- `deploy` (commented out until the Azure resources exist): Azure login through OIDC (no stored secret), migrations as a separate Container Apps Job, then the API image update.
+
+## Container
+
+The [`Dockerfile`](Dockerfile) is multi-stage (SDK build, EF Core migrations bundle, ASP.NET runtime) and runs as the
+non-root user of the .NET image on port 8080, with `ForwardedHeaders__Enabled=true` (it always sits behind the Container
+Apps ingress). The same image carries `/app/efbundle`, the migrations executable, run as its own deploy step with
+`ConnectionStrings__DefaultConnection` set; the API itself never migrates. Environment variables outside Development are
+listed, without values, in [`deploy/api.env.example`](deploy/api.env.example).
+
+```bash
+docker build -t family-vault-api .
+docker run --rm --network host -e ConnectionStrings__DefaultConnection="<connection string>" --entrypoint /app/efbundle family-vault-api
+```
+
+Container probes should use `/health/live`: `/health` opens a database connection, which would keep the serverless
+Azure SQL awake (and spend its free monthly quota).
 
 ## Technologies
 
 - .NET 8, C#
 - ASP.NET Core Web API
-- Entity Framework Core (Pomelo MySQL)
+- Entity Framework Core (SQL Server)
 - AutoMapper
 - Serilog
 - Swagger / OpenAPI
