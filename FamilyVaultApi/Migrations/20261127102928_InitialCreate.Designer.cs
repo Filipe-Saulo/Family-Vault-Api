@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FamilyVaultApi.Migrations
 {
     [DbContext(typeof(DatabaseContext))]
-    [Migration("20261117182653_AddChargeExtractionSource")]
-    partial class AddChargeExtractionSource
+    [Migration("20261127102928_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -21,9 +21,9 @@ namespace FamilyVaultApi.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "8.0.10")
-                .HasAnnotation("Relational:MaxIdentifierLength", 64);
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
-            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.Category", b =>
                 {
@@ -32,7 +32,7 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("category_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("CategoryId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CategoryId"));
 
                     b.Property<int>("CategoryPurposeId")
                         .HasColumnType("int")
@@ -40,27 +40,25 @@ namespace FamilyVaultApi.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("varchar(255)")
+                        .HasColumnType("nvarchar(255)")
                         .HasColumnName("description");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("datetime(6)")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlComputedColumn(b.Property<DateTime?>("UpdatedAt"));
-
                     b.Property<string>("UserId")
                         .HasMaxLength(255)
-                        .HasColumnType("varchar(255)")
+                        .HasColumnType("nvarchar(255)")
                         .HasColumnName("user_id");
 
                     b.HasKey("CategoryId");
@@ -128,45 +126,43 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("category_purpose_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("CategoryPurposeId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CategoryPurposeId"));
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasColumnType("nvarchar(20)")
                         .HasColumnName("code");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("varchar(200)")
+                        .HasColumnType("nvarchar(200)")
                         .HasColumnName("description");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("tinyint(1)")
+                        .HasColumnType("bit")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("varchar(50)")
+                        .HasColumnType("nvarchar(50)")
                         .HasColumnName("name");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("datetime(6)")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlComputedColumn(b.Property<DateTime?>("UpdatedAt"));
 
                     b.HasKey("CategoryPurposeId");
 
@@ -207,7 +203,7 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("charge_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("ChargeId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ChargeId"));
 
                     b.Property<decimal?>("Amount")
                         .HasPrecision(15, 2)
@@ -216,28 +212,28 @@ namespace FamilyVaultApi.Migrations
 
                     b.Property<string>("Barcode")
                         .HasMaxLength(48)
-                        .HasColumnType("varchar(48)")
+                        .HasColumnType("nvarchar(48)")
                         .HasColumnName("barcode");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
+                        .HasColumnType("nvarchar(500)")
                         .HasColumnName("description");
 
                     b.Property<DateTime?>("DueDate")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("due_date");
 
                     b.Property<string>("ExtractionSource")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasColumnType("nvarchar(20)")
                         .HasColumnName("extraction_source");
 
                     b.Property<int>("InboundDocumentId")
@@ -246,8 +242,12 @@ namespace FamilyVaultApi.Migrations
 
                     b.Property<string>("Issuer")
                         .HasMaxLength(200)
-                        .HasColumnType("varchar(200)")
+                        .HasColumnType("nvarchar(200)")
                         .HasColumnName("issuer");
+
+                    b.Property<int?>("PossibleDuplicateChargeId")
+                        .HasColumnType("int")
+                        .HasColumnName("possible_duplicate_charge_id");
 
                     b.Property<int?>("PossibleDuplicateTransactionId")
                         .HasColumnType("int")
@@ -256,7 +256,7 @@ namespace FamilyVaultApi.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasColumnType("nvarchar(20)")
                         .HasColumnName("status");
 
                     b.Property<int?>("SuggestedCategoryId")
@@ -270,7 +270,7 @@ namespace FamilyVaultApi.Migrations
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)")
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.HasKey("ChargeId");
@@ -278,6 +278,9 @@ namespace FamilyVaultApi.Migrations
                     b.HasIndex("InboundDocumentId")
                         .IsUnique()
                         .HasDatabaseName("idx_charges_inbound_document");
+
+                    b.HasIndex("PossibleDuplicateChargeId")
+                        .HasDatabaseName("idx_charges_possible_duplicate_charge");
 
                     b.HasIndex("PossibleDuplicateTransactionId");
 
@@ -301,46 +304,46 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("gmail_connection_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("GmailConnectionId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("GmailConnectionId"));
 
                     b.Property<DateTime>("ConnectedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("connected_at");
 
                     b.Property<string>("GoogleEmail")
                         .IsRequired()
                         .HasMaxLength(320)
-                        .HasColumnType("varchar(320)")
+                        .HasColumnType("nvarchar(320)")
                         .HasColumnName("google_email");
 
                     b.Property<DateTime?>("InitialScanCompletedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("initial_scan_completed_at");
 
                     b.Property<DateTime?>("LastScanRequestedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("last_scan_requested_at");
 
                     b.Property<string>("RefreshTokenEncrypted")
                         .IsRequired()
                         .HasMaxLength(1024)
-                        .HasColumnType("varchar(1024)")
+                        .HasColumnType("nvarchar(1024)")
                         .HasColumnName("refresh_token_encrypted");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasColumnType("nvarchar(20)")
                         .HasColumnName("status");
 
                     b.Property<DateTime?>("SyncedUntil")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("synced_until");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)")
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.HasKey("GmailConnectionId");
@@ -359,22 +362,22 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("gmail_ignored_sender_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("GmailIgnoredSenderId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("GmailIgnoredSenderId"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at");
 
                     b.Property<string>("Sender")
                         .IsRequired()
                         .HasMaxLength(254)
-                        .HasColumnType("varchar(254)")
+                        .HasColumnType("nvarchar(254)")
                         .HasColumnName("sender");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)")
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.HasKey("GmailIgnoredSenderId");
@@ -393,28 +396,28 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("gmail_oauth_state_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("GmailOAuthStateId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("GmailOAuthStateId"));
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("expires_at");
 
                     b.Property<string>("ReturnUrl")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
+                        .HasColumnType("nvarchar(500)")
                         .HasColumnName("return_url");
 
                     b.Property<string>("StateHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
+                        .HasColumnType("nvarchar(64)")
                         .HasColumnName("state_hash");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)")
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.HasKey("GmailOAuthStateId");
@@ -438,14 +441,14 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("gmail_scan_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("GmailScanId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("GmailScanId"));
 
                     b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("completed_at");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at");
 
                     b.Property<int>("Found")
@@ -457,7 +460,7 @@ namespace FamilyVaultApi.Migrations
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasColumnType("nvarchar(20)")
                         .HasColumnName("kind");
 
                     b.Property<int>("Processed")
@@ -469,21 +472,21 @@ namespace FamilyVaultApi.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasColumnType("nvarchar(20)")
                         .HasColumnName("status");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)")
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.Property<DateTime>("WindowEnd")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("window_end");
 
                     b.Property<DateTime>("WindowStart")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("window_start");
 
                     b.HasKey("GmailScanId");
@@ -504,7 +507,7 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("inbound_document_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("InboundDocumentId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("InboundDocumentId"));
 
                     b.Property<int>("Attempts")
                         .ValueGeneratedOnAdd()
@@ -514,24 +517,24 @@ namespace FamilyVaultApi.Migrations
 
                     b.Property<string>("ContentType")
                         .HasMaxLength(50)
-                        .HasColumnType("varchar(50)")
+                        .HasColumnType("nvarchar(50)")
                         .HasColumnName("content_type");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("ExternalId")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("varchar(200)")
+                        .HasColumnType("nvarchar(200)")
                         .HasColumnName("external_id");
 
                     b.Property<string>("FailureReason")
                         .HasMaxLength(300)
-                        .HasColumnType("varchar(300)")
+                        .HasColumnType("nvarchar(300)")
                         .HasColumnName("failure_reason");
 
                     b.Property<int?>("GmailScanId")
@@ -545,42 +548,42 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnName("password_attempts");
 
                     b.Property<DateTime?>("PasswordRequiredAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("password_required_at");
 
                     b.Property<DateTime?>("ProcessingStartedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("processing_started_at");
 
                     b.Property<DateTime>("ReceivedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("received_at");
 
                     b.Property<string>("Sender")
                         .HasMaxLength(320)
-                        .HasColumnType("varchar(320)")
+                        .HasColumnType("nvarchar(320)")
                         .HasColumnName("sender");
 
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasColumnType("nvarchar(20)")
                         .HasColumnName("source");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasColumnType("nvarchar(20)")
                         .HasColumnName("status");
 
                     b.Property<byte[]>("TemporaryContent")
-                        .HasColumnType("longblob")
+                        .HasColumnType("varbinary(max)")
                         .HasColumnName("temporary_content");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)")
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.HasKey("InboundDocumentId");
@@ -604,32 +607,32 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("pdf_sender_password_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("PdfSenderPasswordId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PdfSenderPasswordId"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at");
 
                     b.Property<string>("PasswordEncrypted")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
+                        .HasColumnType("nvarchar(500)")
                         .HasColumnName("password_encrypted");
 
                     b.Property<string>("Sender")
                         .IsRequired()
                         .HasMaxLength(254)
-                        .HasColumnType("varchar(254)")
+                        .HasColumnType("nvarchar(254)")
                         .HasColumnName("sender");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("updated_at");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)")
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.HasKey("PdfSenderPasswordId");
@@ -648,46 +651,46 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("personal_access_token_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("PersonalAccessTokenId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PersonalAccessTokenId"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("expires_at");
 
                     b.Property<DateTime?>("LastUsedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("last_used_at");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("varchar(100)")
+                        .HasColumnType("nvarchar(100)")
                         .HasColumnName("name");
 
                     b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("revoked_at");
 
                     b.Property<string>("Scope")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("varchar(50)")
+                        .HasColumnType("nvarchar(50)")
                         .HasColumnName("scope");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
+                        .HasColumnType("nvarchar(64)")
                         .HasColumnName("token_hash");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("varchar(255)")
+                        .HasColumnType("nvarchar(255)")
                         .HasColumnName("user_id");
 
                     b.HasKey("PersonalAccessTokenId");
@@ -709,44 +712,44 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("refresh_token_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("RefreshTokenId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("RefreshTokenId"));
 
                     b.Property<int>("Client")
                         .HasColumnType("int")
                         .HasColumnName("client");
 
                     b.Property<DateTime?>("ConsumedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("consumed_at");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("expires_at");
 
                     b.Property<string>("FamilyId")
                         .IsRequired()
                         .HasMaxLength(36)
-                        .HasColumnType("varchar(36)")
+                        .HasColumnType("nvarchar(36)")
                         .HasColumnName("family_id");
 
                     b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("revoked_at");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
+                        .HasColumnType("nvarchar(64)")
                         .HasColumnName("token_hash");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("varchar(255)")
+                        .HasColumnType("nvarchar(255)")
                         .HasColumnName("user_id");
 
                     b.HasKey("RefreshTokenId");
@@ -771,7 +774,7 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("transaction_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("TransactionId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TransactionId"));
 
                     b.Property<decimal>("Amount")
                         .HasPrecision(15, 2)
@@ -784,38 +787,36 @@ namespace FamilyVaultApi.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
+                        .HasColumnType("nvarchar(500)")
                         .HasColumnName("description");
 
                     b.Property<DateTime>("TransactionDate")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("transaction_date")
-                        .HasDefaultValueSql("CURRENT_DATE");
+                        .HasDefaultValueSql("CAST(CURRENT_TIMESTAMP AS date)");
 
                     b.Property<int>("TransactionTypeId")
                         .HasColumnType("int")
                         .HasColumnName("transaction_type_id");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("datetime(6)")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlComputedColumn(b.Property<DateTime?>("UpdatedAt"));
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("varchar(450)")
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.HasKey("TransactionId");
@@ -845,45 +846,43 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnType("int")
                         .HasColumnName("transaction_type_id");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("TransactionTypeId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TransactionTypeId"));
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasColumnType("nvarchar(20)")
                         .HasColumnName("code");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("varchar(200)")
+                        .HasColumnType("nvarchar(200)")
                         .HasColumnName("description");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("tinyint(1)")
+                        .HasColumnType("bit")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("varchar(50)")
+                        .HasColumnType("nvarchar(50)")
                         .HasColumnName("name");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("datetime(6)")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlComputedColumn(b.Property<DateTime?>("UpdatedAt"));
 
                     b.HasKey("TransactionTypeId");
 
@@ -920,7 +919,7 @@ namespace FamilyVaultApi.Migrations
             modelBuilder.Entity("FamilyVaultApi.Data.Entities.User", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("varchar(255)")
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("user_id");
 
                     b.Property<int>("AccessFailedCount")
@@ -932,85 +931,83 @@ namespace FamilyVaultApi.Migrations
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("varchar(100)")
+                        .HasColumnType("nvarchar(100)")
                         .HasColumnName("first_name");
 
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("varchar(255)")
+                        .HasColumnType("nvarchar(255)")
                         .HasColumnName("full_name");
 
                     b.Property<DateTime>("LastLogin")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("last_login")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("varchar(100)")
+                        .HasColumnType("nvarchar(100)")
                         .HasColumnName("last_name");
 
                     b.Property<bool>("LockoutEnabled")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("NormalizedUserName")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("PasswordHash")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PhoneNumber")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<DateTime>("RegisteredAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("registered_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("SecurityStamp")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("TwoFactorEnabled")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("datetime(6)")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlComputedColumn(b.Property<DateTime?>("UpdatedAt"));
-
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("nvarchar(256)");
 
                     b.HasKey("Id");
 
@@ -1022,7 +1019,8 @@ namespace FamilyVaultApi.Migrations
 
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
-                        .HasDatabaseName("UserNameIndex");
+                        .HasDatabaseName("UserNameIndex")
+                        .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.ToTable("tb_user", (string)null);
                 });
@@ -1031,7 +1029,7 @@ namespace FamilyVaultApi.Migrations
                 {
                     b.Property<string>("Destination")
                         .HasMaxLength(254)
-                        .HasColumnType("varchar(254)")
+                        .HasColumnType("nvarchar(254)")
                         .HasColumnName("destination");
 
                     b.Property<int>("Purpose")
@@ -1041,15 +1039,15 @@ namespace FamilyVaultApi.Migrations
                     b.Property<string>("CodeHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
+                        .HasColumnType("nvarchar(64)")
                         .HasColumnName("code_hash");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("expires_at");
 
                     b.Property<int>("FailedAttempts")
@@ -1068,7 +1066,7 @@ namespace FamilyVaultApi.Migrations
                 {
                     b.Property<string>("Destination")
                         .HasMaxLength(254)
-                        .HasColumnType("varchar(254)")
+                        .HasColumnType("nvarchar(254)")
                         .HasColumnName("destination");
 
                     b.Property<int>("DayCount")
@@ -1076,11 +1074,11 @@ namespace FamilyVaultApi.Migrations
                         .HasColumnName("day_count");
 
                     b.Property<DateTime>("DayWindowStartedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("day_window_started_at");
 
                     b.Property<DateTime>("LastSentAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("datetime2")
                         .HasColumnName("last_sent_at");
 
                     b.HasKey("Destination");
@@ -1094,25 +1092,26 @@ namespace FamilyVaultApi.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("NormalizedName")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("nvarchar(256)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName")
                         .IsUnique()
-                        .HasDatabaseName("RoleNameIndex");
+                        .HasDatabaseName("RoleNameIndex")
+                        .HasFilter("[NormalizedName] IS NOT NULL");
 
                     b.ToTable("tb_roles", (string)null);
 
@@ -1139,17 +1138,17 @@ namespace FamilyVaultApi.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("ClaimType")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ClaimValue")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
 
@@ -1194,17 +1193,17 @@ namespace FamilyVaultApi.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("ClaimType")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ClaimValue")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
 
@@ -1216,17 +1215,17 @@ namespace FamilyVaultApi.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
                 {
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ProviderKey")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ProviderDisplayName")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("LoginProvider", "ProviderKey");
 
@@ -1238,10 +1237,10 @@ namespace FamilyVaultApi.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
                 {
                     b.Property<string>("UserId")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("RoleId")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("UserId", "RoleId");
 
@@ -1253,16 +1252,16 @@ namespace FamilyVaultApi.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
                 {
                     b.Property<string>("UserId")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Name")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Value")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("UserId", "LoginProvider", "Name");
 
@@ -1298,32 +1297,36 @@ namespace FamilyVaultApi.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_charges_inbound_document");
 
+                    b.HasOne("FamilyVaultApi.Data.Entities.Charge", "PossibleDuplicateCharge")
+                        .WithMany()
+                        .HasForeignKey("PossibleDuplicateChargeId")
+                        .HasConstraintName("fk_charges_possible_duplicate_charge");
+
                     b.HasOne("FamilyVaultApi.Data.Entities.Transaction", "PossibleDuplicateTransaction")
                         .WithMany()
                         .HasForeignKey("PossibleDuplicateTransactionId")
-                        .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_charges_possible_duplicate_transaction");
 
                     b.HasOne("FamilyVaultApi.Data.Entities.Category", "SuggestedCategory")
                         .WithMany()
                         .HasForeignKey("SuggestedCategoryId")
-                        .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_charges_suggested_category");
 
                     b.HasOne("FamilyVaultApi.Data.Entities.Transaction", "Transaction")
                         .WithMany()
                         .HasForeignKey("TransactionId")
-                        .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_charges_transaction");
 
                     b.HasOne("FamilyVaultApi.Data.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired()
                         .HasConstraintName("fk_charges_user");
 
                     b.Navigation("InboundDocument");
+
+                    b.Navigation("PossibleDuplicateCharge");
 
                     b.Navigation("PossibleDuplicateTransaction");
 
@@ -1387,7 +1390,6 @@ namespace FamilyVaultApi.Migrations
                     b.HasOne("FamilyVaultApi.Data.Entities.GmailScan", "GmailScan")
                         .WithMany()
                         .HasForeignKey("GmailScanId")
-                        .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_inbound_documents_gmail_scan");
 
                     b.HasOne("FamilyVaultApi.Data.Entities.User", "User")

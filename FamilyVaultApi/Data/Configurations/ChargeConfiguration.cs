@@ -54,11 +54,17 @@ namespace FamilyVaultApi.Data.Configurations
             builder.HasIndex(c => c.PossibleDuplicateChargeId).HasDatabaseName("idx_charges_possible_duplicate_charge");
 
             // Foreign keys
+            // As referências opcionais (categoria sugerida, transação, possíveis duplicatas) são ClientSetNull: o SQL
+            // Server não aceita SET NULL que forme ciclo (a autorreferência) ou um segundo caminho a partir de tb_user.
+            // Quem apaga categoria, transação ou usuário zera essas colunas antes (CategoryRepository,
+            // TransactionRepository e UserRepository).
             builder.HasOne(c => c.User)
                 .WithMany()
                 .HasForeignKey(c => c.UserId)
                 .HasConstraintName("fk_charges_user")
-                .OnDelete(DeleteBehavior.Cascade);
+                // Sem cascata no banco: o SQL Server recusa dois caminhos de cascata até charges, e a cobrança já sai
+                // com o documento (usuário → inbound_documents → charges)
+                .OnDelete(DeleteBehavior.ClientCascade);
 
             builder.HasOne(c => c.InboundDocument)
                 .WithOne(d => d.Charge)
@@ -70,25 +76,25 @@ namespace FamilyVaultApi.Data.Configurations
                 .WithMany()
                 .HasForeignKey(c => c.SuggestedCategoryId)
                 .HasConstraintName("fk_charges_suggested_category")
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.ClientSetNull);
 
             builder.HasOne(c => c.PossibleDuplicateTransaction)
                 .WithMany()
                 .HasForeignKey(c => c.PossibleDuplicateTransactionId)
                 .HasConstraintName("fk_charges_possible_duplicate_transaction")
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.ClientSetNull);
 
             builder.HasOne(c => c.PossibleDuplicateCharge)
                 .WithMany()
                 .HasForeignKey(c => c.PossibleDuplicateChargeId)
                 .HasConstraintName("fk_charges_possible_duplicate_charge")
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.ClientSetNull);
 
             builder.HasOne(c => c.Transaction)
                 .WithMany()
                 .HasForeignKey(c => c.TransactionId)
                 .HasConstraintName("fk_charges_transaction")
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.ClientSetNull);
         }
     }
 }

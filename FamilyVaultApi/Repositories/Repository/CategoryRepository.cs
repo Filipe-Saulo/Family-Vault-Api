@@ -120,8 +120,21 @@ namespace FamilyVaultApi.Repositories.Repository
                 throw new NotFoundException("Categoria", id);
 
 
-            _context.Categories.Remove(entity);
-            await _context.SaveChangesAsync();
+            // fk_charges_suggested_category não tem SET NULL no banco (SQL Server): zera a sugestão antes, na mesma transação
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+
+                await _context.Charges
+                    .Where(c => c.SuggestedCategoryId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.SuggestedCategoryId, (int?)null));
+
+                _context.Categories.Remove(entity);
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+            });
         }
 
         // ownerUserId nulo: só as globais; preenchido: as globais e as desse usuário

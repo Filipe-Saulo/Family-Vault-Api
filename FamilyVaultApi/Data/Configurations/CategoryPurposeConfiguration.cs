@@ -37,8 +37,7 @@ namespace FamilyVaultApi.Data.Configurations
 
             builder.Property(cp => cp.UpdatedAt)
                 .HasColumnName("updated_at")
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .ValueGeneratedOnAddOrUpdate();
+                .HasDefaultValueSql("CURRENT_TIMESTAMP"); // na alteração, o DatabaseContext.SaveChanges preenche
 
             // Indexes
             builder.HasIndex(cp => cp.Code).IsUnique().HasDatabaseName("uk_category_purposes_code");

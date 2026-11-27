@@ -32,6 +32,32 @@ namespace FamilyVaultApi.Data
 
         }  
 
+        // O SQL Server não tem o "ON UPDATE CURRENT_TIMESTAMP" do MySQL: o updated_at de qualquer linha alterada pelo
+        // SaveChanges é preenchido aqui. ExecuteUpdate não passa por aqui (o único que grava updated_at, em
+        // pdf_sender_passwords, já informa o valor).
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            StampUpdatedAt();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+        {
+            StampUpdatedAt();
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        private void StampUpdatedAt()
+        {
+            var now = DateTime.UtcNow;
+            foreach (var entry in ChangeTracker.Entries().Where(e => e.State == EntityState.Modified))
+            {
+                var property = entry.Metadata.FindProperty("UpdatedAt");
+                if (property != null && (property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?)))
+                    entry.Property(property.Name).CurrentValue = now;
+            }
+        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);    

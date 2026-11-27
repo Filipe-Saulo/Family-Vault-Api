@@ -180,6 +180,24 @@ namespace FamilyVaultApi.Repositories.Repository
 
                 await using var transaction = await _context.Database.BeginTransactionAsync();
 
+                // As FKs de charges e inbound_documents abaixo não têm SET NULL no banco (SQL Server recusa mais de um
+                // caminho de cascata a partir de tb_user): zera o que aponta para linhas deste usuário, de qualquer dono
+                await _context.Charges
+                    .Where(c => c.Transaction != null && c.Transaction.UserId == userId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.TransactionId, (int?)null));
+                await _context.Charges
+                    .Where(c => c.PossibleDuplicateTransaction != null && c.PossibleDuplicateTransaction.UserId == userId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.PossibleDuplicateTransactionId, (int?)null));
+                await _context.Charges
+                    .Where(c => c.SuggestedCategory != null && c.SuggestedCategory.UserId == userId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.SuggestedCategoryId, (int?)null));
+                await _context.Charges
+                    .Where(c => c.PossibleDuplicateCharge != null && c.PossibleDuplicateCharge.UserId == userId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.PossibleDuplicateChargeId, (int?)null));
+                await _context.InboundDocuments
+                    .Where(d => d.UserId == userId && d.GmailScanId != null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(d => d.GmailScanId, (int?)null));
+
                 await _context.Transactions.Where(t => t.UserId == userId).ExecuteDeleteAsync();
                 await _context.Categories.Where(c => c.UserId == userId).ExecuteDeleteAsync();
 

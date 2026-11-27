@@ -5,13 +5,13 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FamilyVaultApi.IntegrationTests.Http
 {
-    // Erro "transitório" de mentira: o SQLite não tem a execution strategy com retry do MySQL
+    // Erro "transitório" de mentira: o SQLite não tem a execution strategy com retry do SQL Server
     public sealed class SimulatedTransientException : Exception
     {
         public SimulatedTransientException() : base("Falha transitória simulada.") { }
     }
 
-    // Faz o papel do EnableRetryOnFailure do MySQL: repete a operação quando a falha é a simulada
+    // Faz o papel do EnableRetryOnFailure do SQL Server: repete a operação quando a falha é a simulada
     public sealed class RetryOnSimulatedFailureStrategy : ExecutionStrategy
     {
         public RetryOnSimulatedFailureStrategy(ExecutionStrategyDependencies dependencies)

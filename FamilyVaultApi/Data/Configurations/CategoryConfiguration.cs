@@ -28,8 +28,7 @@ namespace FamilyVaultApi.Data.Configurations
 
             builder.Property(c => c.UpdatedAt)
                 .HasColumnName("updated_at")
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .ValueGeneratedOnAddOrUpdate();
+                .HasDefaultValueSql("CURRENT_TIMESTAMP"); // na alteração, o DatabaseContext.SaveChanges preenche
 
             // Nulo = categoria global (criada por Administrator)
             builder.Property(c => c.UserId)

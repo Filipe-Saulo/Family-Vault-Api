@@ -350,3 +350,8 @@ coverage/
 
 # Relatórios dos evals (FamilyVaultApi.Evals)
 eval-reports/
+
+# Senha do SQL Server local do docker compose (modelo em .env.example)
+.env
+.env.*
+!.env.example

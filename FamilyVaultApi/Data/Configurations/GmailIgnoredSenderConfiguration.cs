@@ -18,7 +18,7 @@ namespace FamilyVaultApi.Data.Configurations
                 .IsRequired()
                 .HasMaxLength(450);
 
-            // 254: tamanho máximo de um endereço (RFC 5321); com user_id (450) o índice único cabe nos 3072 bytes do InnoDB em utf8mb4
+            // 254: tamanho máximo de um endereço (RFC 5321); com user_id (450) o índice único em nvarchar ocupa 1.408 bytes, dentro dos 1.700 de chave de índice não clusterizado do SQL Server
             builder.Property(s => s.Sender).HasColumnName("sender").IsRequired().HasMaxLength(GmailIgnoredSender.MaxSenderLength);
             builder.Property(s => s.CreatedAt).HasColumnName("created_at").IsRequired();
 

@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace FamilyVaultApi.IntegrationTests
 {
-    // Sobe a API no ambiente "Testing" com SQLite em memória no lugar do MySQL.
+    // Sobe a API no ambiente "Testing" com SQLite em memória no lugar do SQL Server.
     // O schema (com os papéis do HasData) é criado antes da subida, porque o Program
     // roda o AdminSeeder logo depois do Build.
     public class FamilyVaultApiFactory : WebApplicationFactory<Program>
