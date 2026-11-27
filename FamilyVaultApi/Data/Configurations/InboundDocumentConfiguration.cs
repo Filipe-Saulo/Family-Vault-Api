@@ -43,8 +43,9 @@ namespace FamilyVaultApi.Data.Configurations
 
             builder.Property(d => d.FailureReason).HasColumnName("failure_reason").HasMaxLength(300);
 
-            // longblob no MySQL (o padrão do provedor para byte[] seria um varbinary menor)
-            builder.Property(d => d.TemporaryContent).HasColumnName("temporary_content").HasColumnType("longblob");
+            // varbinary(max), o padrão do SQL Server para byte[] sem tamanho: o arquivo inteiro (até Charges:MaxUploadBytes)
+            // fica aqui até a extração. Sem HasColumnType para o SQLite dos testes também aceitar
+            builder.Property(d => d.TemporaryContent).HasColumnName("temporary_content");
 
             builder.Property(d => d.ContentType).HasColumnName("content_type").HasMaxLength(50);
 
@@ -77,7 +78,9 @@ namespace FamilyVaultApi.Data.Configurations
                 .WithMany()
                 .HasForeignKey(d => d.GmailScanId)
                 .HasConstraintName("fk_inbound_documents_gmail_scan")
-                .OnDelete(DeleteBehavior.SetNull);
+                // ClientSetNull: SET NULL no banco seria um segundo caminho a partir de tb_user (via gmail_scans), que o
+                // SQL Server recusa. Varreduras só saem com o usuário, e o UserRepository zera a coluna antes.
+                .OnDelete(DeleteBehavior.ClientSetNull);
         }
     }
 }

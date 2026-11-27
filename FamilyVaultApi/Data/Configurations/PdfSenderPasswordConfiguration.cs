@@ -18,7 +18,7 @@ namespace FamilyVaultApi.Data.Configurations
                 .IsRequired()
                 .HasMaxLength(450);
 
-            // 254, como em gmail_ignored_senders: com user_id (450) o índice único cabe nos 3072 bytes do InnoDB em utf8mb4
+            // 254, como em gmail_ignored_senders: com user_id (450) o índice único em nvarchar ocupa 1.408 bytes, dentro dos 1.700 do SQL Server
             builder.Property(p => p.Sender).HasColumnName("sender").IsRequired().HasMaxLength(GmailIgnoredSender.MaxSenderLength);
             builder.Property(p => p.PasswordEncrypted).HasColumnName("password_encrypted").IsRequired().HasMaxLength(500);
             builder.Property(p => p.CreatedAt).HasColumnName("created_at").IsRequired();

@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/logs/
+.git/
+.github/
+.vs/
+coverage/
+eval-reports/
+FamilyVaultApi.Evals/
+FamilyVaultApi.IntegrationTests/
+FamilyVaultApi.UnitTests/
+**/*.user
+**/.env
+**/.env.*

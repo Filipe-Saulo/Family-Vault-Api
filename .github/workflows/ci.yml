@@ -1,17 +1,17 @@
 name: CI
 
-# Pipeline simples de build + testes automatizados.
-# Este projeto é um demonstrativo de portfólio e não é implantado em lugar
-# nenhum, então este workflow não inclui deploy — só mostra a mecânica
-# básica de um gate de build+test automatizado a cada push/PR. Num cenário
-# real, esse mesmo pipeline poderia evoluir para incluir deploy, testes de
-# integração com banco de dados real, etc.
+# Build + testes a cada push/PR; a imagem Docker é montada e testada contra um SQL Server de verdade em todo PR, e
+# publicada no GitHub Container Registry só no push para a main. O deploy na Azure (OIDC) está desenhado no fim do
+# arquivo, comentado: os recursos ainda não existem.
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
@@ -46,3 +46,118 @@ jobs:
           reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage/report -reporttypes:"MarkdownSummaryGithub;TextSummary"
           cat coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
           cat coverage/report/Summary.txt
+
+  image:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # O GHCR exige o nome em minúsculas (o dono do repositório tem maiúsculas)
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/family-vault-api" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: docker build --tag "$IMAGE:${{ github.sha }}" .
+
+      # Teste de fumaça: SQL Server descartável (senha gerada aqui, nada fixo no repositório), migrations pelo bundle
+      # da própria imagem e a API subindo como o usuário sem privilégio. Development só para não exigir Twilio/Resend.
+      - name: Smoke test against SQL Server
+        run: |
+          SA_PASSWORD="Ci-$(openssl rand -hex 16)"
+          JWT_KEY="$(openssl rand -base64 48)"
+          echo "::add-mask::$SA_PASSWORD"
+          echo "::add-mask::$JWT_KEY"
+          CONNECTION="Server=localhost,1433;Database=FamilyVault;User Id=sa;Password=$SA_PASSWORD;TrustServerCertificate=True"
+
+          docker run -d --name sqlserver --network host -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="$SA_PASSWORD" mcr.microsoft.com/mssql/server:2022-latest
+          for i in $(seq 1 60); do
+            docker exec sqlserver /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA_PASSWORD" -Q "SELECT 1" > /dev/null 2>&1 && break
+            sleep 2
+          done
+
+          docker run --rm --network host -e ConnectionStrings__DefaultConnection="$CONNECTION" --entrypoint /app/efbundle "$IMAGE:${{ github.sha }}"
+
+          docker run -d --name api --network host \
+            -e ASPNETCORE_ENVIRONMENT=Development \
+            -e ConnectionStrings__DefaultConnection="$CONNECTION" \
+            -e JwtSettings__Key="$JWT_KEY" \
+            "$IMAGE:${{ github.sha }}"
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8080/health/live > /dev/null 2>&1 && break
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/health/live
+          curl -fsS http://localhost:8080/health
+          test "$(docker exec api id -u)" != "0"
+
+      - name: Smoke test logs
+        if: failure()
+        run: |
+          docker logs api || true
+          docker logs sqlserver 2>&1 | tail -50 || true
+
+      - name: Login to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker tag "$IMAGE:${{ github.sha }}" "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+  # Deploy na Azure: desenhado, ainda desligado (os recursos não existem). Para ligar:
+  # 1. App registration com federated credential do GitHub (subject repo:<dono>/Family-Vault-Api:environment:production)
+  #    e papel Contributor só no resource group; AZURE_CLIENT_ID, AZURE_TENANT_ID e AZURE_SUBSCRIPTION_ID em
+  #    Settings > Variables (são identificadores, não segredos: com OIDC não há client secret).
+  # 2. Container Apps Job "family-vault-api-migrations" (gatilho manual, mesma imagem, comando /app/efbundle e a
+  #    connection string como secret) e o Container App "family-vault-api" (sonda em /health/live, nunca /health).
+  # 3. Pacote do GHCR público, ou credencial de leitura do registro configurada no Container App.
+  #
+  # deploy:
+  #   needs: image
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   runs-on: ubuntu-latest
+  #   environment: production
+  #   permissions:
+  #     id-token: write
+  #     contents: read
+  #   env:
+  #     RESOURCE_GROUP: rg-family-vault
+  #   steps:
+  #     - name: Image name
+  #       run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/family-vault-api:${{ github.sha }}" >> "$GITHUB_ENV"
+  #
+  #     - name: Azure login (OIDC)
+  #       uses: azure/login@v2
+  #       with:
+  #         client-id: ${{ vars.AZURE_CLIENT_ID }}
+  #         tenant-id: ${{ vars.AZURE_TENANT_ID }}
+  #         subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  #
+  #     # Migrations antes da API nova, num passo próprio: a API nunca migra ao subir
+  #     - name: Migrations
+  #       run: |
+  #         az containerapp job update --name family-vault-api-migrations --resource-group "$RESOURCE_GROUP" --image "$IMAGE"
+  #         EXECUTION=$(az containerapp job start --name family-vault-api-migrations --resource-group "$RESOURCE_GROUP" --query name -o tsv)
+  #         for i in $(seq 1 60); do
+  #           STATUS=$(az containerapp job execution show --name family-vault-api-migrations --resource-group "$RESOURCE_GROUP" --job-execution-name "$EXECUTION" --query properties.status -o tsv)
+  #           [ "$STATUS" = "Succeeded" ] && exit 0
+  #           [ "$STATUS" = "Failed" ] && exit 1
+  #           sleep 10
+  #         done
+  #         exit 1
+  #
+  #     - name: Deploy API
+  #       run: az containerapp update --name family-vault-api --resource-group "$RESOURCE_GROUP" --image "$IMAGE"

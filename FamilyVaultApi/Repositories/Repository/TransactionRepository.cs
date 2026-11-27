@@ -115,8 +115,25 @@ namespace FamilyVaultApi.Repositories.Repository
             if (entity == null)
                 throw new NotFoundException("Transação", id);
 
-            _context.Transactions.Remove(entity);
-            await _context.SaveChangesAsync();
+            // fk_charges_transaction e fk_charges_possible_duplicate_transaction não têm SET NULL no banco (SQL Server):
+            // zera as referências antes, na mesma transação
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+
+                await _context.Charges
+                    .Where(c => c.TransactionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.TransactionId, (int?)null));
+                await _context.Charges
+                    .Where(c => c.PossibleDuplicateTransactionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.PossibleDuplicateTransactionId, (int?)null));
+
+                _context.Transactions.Remove(entity);
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+            });
         }
 
         // Recarrega pelo id com a mesma projeção da listagem (Category e TransactionType preenchidos)

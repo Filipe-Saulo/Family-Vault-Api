@@ -14,6 +14,7 @@ using FamilyVaultApi.Services.IService;
 using FamilyVaultApi.Services.Service;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -45,31 +46,14 @@ if (useRealDelivery && new[] { "ApiKey", "From" }.Any(name => string.IsNullOrWhi
 
 // Add services to the container.
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-// No ambiente "Testing" o teste de integração registra o próprio banco (SQLite em memória);
-// o AutoDetect abriria conexão com o MySQL aqui.
+// No ambiente "Testing" o teste de integração registra o próprio banco (SQLite em memória).
 if (!builder.Environment.IsEnvironment("Testing"))
 {
-    try
-    {
-        ServerVersion serverVersion = ServerVersion.AutoDetect(connectionString);  // Automatically detect MySQL version
-        Console.WriteLine("MySQL server version detected successfully.");
+    if (string.IsNullOrWhiteSpace(connectionString))
+        throw new InvalidOperationException(
+            "ConnectionStrings:DefaultConnection ausente. Em desenvolvimento use 'dotnet user-secrets set \"ConnectionStrings:DefaultConnection\" \"...\"'; nos demais ambientes, a variável ConnectionStrings__DefaultConnection.");
 
-        builder.Services.AddDbContext<DatabaseContext>(options =>
-          options.UseMySql(connectionString, serverVersion, mysqlOptions =>
-          {
-              mysqlOptions.EnableRetryOnFailure(
-                  maxRetryCount: 5, // Retry up to 5 times
-                  maxRetryDelay: TimeSpan.FromSeconds(10), // Max delay between retries
-                  errorNumbersToAdd: null // Specify error codes to add to the retry list
-              );
-          })
-      );
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"An error occurred while detecting the MySQL version: {ex.Message}");
-        throw;
-    }
+    builder.Services.AddDbContext<DatabaseContext>(options => SqlServerSetup.Configure(options, connectionString));
 }
 
 builder.Services.AddHttpContextAccessor();
@@ -107,19 +91,35 @@ builder.Services.AddSwaggerGen(options => {
     });
 });
 
+// Origens do painel em Cors:AllowedOrigins (Development: o Vite em localhost:5173). Em produção o painel chama a API
+// pela mesma origem (o nginx repassa /api/*), então a lista pode ficar vazia.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("WebClient", policy =>
     {
         policy
-        .WithOrigins(
-        "http://localhost:5173" 
-        )
+        .WithOrigins(corsOrigins)
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials();
     });
 });
+
+// Atrás do ingress do Container Apps (e do nginx do painel), o IP do cliente e o https chegam em X-Forwarded-For e
+// X-Forwarded-Proto. Ligado por ForwardedHeaders:Enabled (a imagem Docker já liga). Os proxies não têm IP fixo, por
+// isso a lista de redes conhecidas fica vazia e o ForwardLimit diz quantos saltos confiar (o ingress e, pelo painel, o nginx).
+var forwardedHeadersEnabled = builder.Configuration.GetValue("ForwardedHeaders:Enabled", false);
+if (forwardedHeadersEnabled)
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.ForwardLimit = builder.Configuration.GetValue("ForwardedHeaders:ForwardLimit", 1);
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+    });
+}
 
 builder.Host.UseSerilog((ctx, lc) => lc.WriteTo.Console().ReadFrom.Configuration(ctx.Configuration));
 
@@ -325,8 +325,10 @@ builder.Services.AddControllers()
         };
     });
 
+// "database" abre conexão com o banco: fica só em /health. A sonda do Container Apps usa /health/live, que não toca
+// no banco, para não acordar nem manter acordado o Azure SQL serverless (cada minuto acordado gasta a cota grátis).
 builder.Services.AddHealthChecks()
-    .AddMySql(connectionString, name: "mysql");
+    .AddDbContextCheck<DatabaseContext>("database", tags: new[] { "database" });
 
 builder.Services.AddMemoryCache();
 builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
@@ -355,6 +357,10 @@ if (!app.Services.GetRequiredService<IGoogleIdTokenValidator>().IsConfigured)
     app.Logger.LogWarning("GoogleSignIn:ClientIds vazio: o login com Google (POST /api/app/google) responde 503.");
 
 await app.SeedAdministratorAsync();
+
+// Antes do limite por IP e do redirecionamento https, que dependem do IP e do esquema reais
+if (forwardedHeadersEnabled)
+    app.UseForwardedHeaders();
 
 app.UseMiddleware<ApiIpRateLimitMiddleware>();
 
@@ -394,6 +400,7 @@ app.MapMcp("/mcp")
     .RequireAuthorization(McpTokenAuthenticationHandler.PolicyName)
     .RequireRateLimiting(McpRateLimit.PolicyName);
 app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = check => !check.Tags.Contains("database") });
 
 app.Run();
 

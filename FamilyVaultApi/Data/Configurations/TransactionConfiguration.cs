@@ -33,7 +33,7 @@ namespace FamilyVaultApi.Data.Configurations
 
             builder.Property(t => t.TransactionDate)
                 .HasColumnName("transaction_date")
-                .HasDefaultValueSql("CURRENT_DATE");
+                .HasDefaultValueSql("CAST(CURRENT_TIMESTAMP AS date)");
 
             builder.Property(t => t.CreatedAt)
                 .HasColumnName("created_at")
@@ -41,8 +41,7 @@ namespace FamilyVaultApi.Data.Configurations
 
             builder.Property(t => t.UpdatedAt)
                 .HasColumnName("updated_at")
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .ValueGeneratedOnAddOrUpdate();
+                .HasDefaultValueSql("CURRENT_TIMESTAMP"); // na alteração, o DatabaseContext.SaveChanges preenche
 
             // Indexes
             builder.HasIndex(t => t.UserId).HasDatabaseName("idx_transactions_user_id");

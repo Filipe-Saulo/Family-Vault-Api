@@ -32,8 +32,7 @@ namespace FamilyVaultApi.Data.Configurations
 
             builder.Property(u => u.UpdatedAt)
                 .HasColumnName("updated_at")
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .ValueGeneratedOnAddOrUpdate();
+                .HasDefaultValueSql("CURRENT_TIMESTAMP"); // na alteração, o DatabaseContext.SaveChanges preenche
 
             builder.Property(u => u.LastLogin)
                 .HasColumnName("last_login")

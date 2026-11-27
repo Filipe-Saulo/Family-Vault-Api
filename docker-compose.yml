@@ -1,0 +1,20 @@
+# SQL Server local para desenvolvimento (o mesmo motor do Azure SQL de produção).
+# A senha do sa vem do arquivo .env ao lado deste (ignorado pelo git; modelo em .env.example):
+#   docker compose up -d
+# Connection string da API em user-secrets (ver README):
+#   Server=localhost,1433;Database=FamilyVault;User Id=sa;Password=<a mesma senha>;TrustServerCertificate=True
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: family-vault-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?defina MSSQL_SA_PASSWORD no arquivo .env}
+    ports:
+      - "1433:1433"
+    volumes:
+      - family-vault-sqlserver:/var/opt/mssql
+
+volumes:
+  family-vault-sqlserver:
