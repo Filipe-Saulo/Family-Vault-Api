@@ -1,8 +1,8 @@
 name: CI
 
 # Build + testes a cada push/PR; a imagem Docker é montada e testada contra um SQL Server de verdade em todo PR, e
-# publicada no GitHub Container Registry só no push para a main. O deploy na Azure (OIDC) está desenhado no fim do
-# arquivo, comentado: os recursos ainda não existem.
+# publicada no GitHub Container Registry só no push para a main. Depois do push, o job deploy (OIDC) roda as
+# migrations e atualiza o Container App na Azure.
 
 on:
   push:
@@ -117,47 +117,44 @@ jobs:
           docker push "$IMAGE:${{ github.sha }}"
           docker push "$IMAGE:latest"
 
-  # Deploy na Azure: desenhado, ainda desligado (os recursos não existem). Para ligar:
-  # 1. App registration com federated credential do GitHub (subject repo:<dono>/Family-Vault-Api:environment:production)
-  #    e papel Contributor só no resource group; AZURE_CLIENT_ID, AZURE_TENANT_ID e AZURE_SUBSCRIPTION_ID em
-  #    Settings > Variables (são identificadores, não segredos: com OIDC não há client secret).
-  # 2. Container Apps Job "family-vault-api-migrations" (gatilho manual, mesma imagem, comando /app/efbundle e a
-  #    connection string como secret) e o Container App "family-vault-api" (sonda em /health/live, nunca /health).
-  # 3. Pacote do GHCR público, ou credencial de leitura do registro configurada no Container App.
-  #
-  # deploy:
-  #   needs: image
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   runs-on: ubuntu-latest
-  #   environment: production
-  #   permissions:
-  #     id-token: write
-  #     contents: read
-  #   env:
-  #     RESOURCE_GROUP: rg-family-vault
-  #   steps:
-  #     - name: Image name
-  #       run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/family-vault-api:${{ github.sha }}" >> "$GITHUB_ENV"
-  #
-  #     - name: Azure login (OIDC)
-  #       uses: azure/login@v2
-  #       with:
-  #         client-id: ${{ vars.AZURE_CLIENT_ID }}
-  #         tenant-id: ${{ vars.AZURE_TENANT_ID }}
-  #         subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-  #
-  #     # Migrations antes da API nova, num passo próprio: a API nunca migra ao subir
-  #     - name: Migrations
-  #       run: |
-  #         az containerapp job update --name family-vault-api-migrations --resource-group "$RESOURCE_GROUP" --image "$IMAGE"
-  #         EXECUTION=$(az containerapp job start --name family-vault-api-migrations --resource-group "$RESOURCE_GROUP" --query name -o tsv)
-  #         for i in $(seq 1 60); do
-  #           STATUS=$(az containerapp job execution show --name family-vault-api-migrations --resource-group "$RESOURCE_GROUP" --job-execution-name "$EXECUTION" --query properties.status -o tsv)
-  #           [ "$STATUS" = "Succeeded" ] && exit 0
-  #           [ "$STATUS" = "Failed" ] && exit 1
-  #           sleep 10
-  #         done
-  #         exit 1
-  #
-  #     - name: Deploy API
-  #       run: az containerapp update --name family-vault-api --resource-group "$RESOURCE_GROUP" --image "$IMAGE"
+  # Deploy na Azure por OIDC: o azure/login troca o token do GitHub por um da Microsoft, sem client secret.
+  # A app registration gh-family-vault-deploy só aceita este repositório no environment production (que só
+  # aceita a main) e tem o papel personalizado "Family Vault Deployer" no rg-family-vault: atualiza a imagem e
+  # roda o job das migrations, sem apagar nada. AZURE_CLIENT_ID, AZURE_TENANT_ID e AZURE_SUBSCRIPTION_ID ficam em
+  # Settings > Variables: são identificadores, não segredos.
+  deploy:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      RESOURCE_GROUP: rg-family-vault
+    steps:
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/family-vault-api:${{ github.sha }}" >> "$GITHUB_ENV"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Migrations antes da API nova, num passo próprio: a API nunca migra ao subir
+      - name: Migrations
+        run: |
+          az containerapp job update --name family-vault-api-migrations --resource-group "$RESOURCE_GROUP" --image "$IMAGE"
+          EXECUTION=$(az containerapp job start --name family-vault-api-migrations --resource-group "$RESOURCE_GROUP" --query name -o tsv)
+          for i in $(seq 1 60); do
+            STATUS=$(az containerapp job execution show --name family-vault-api-migrations --resource-group "$RESOURCE_GROUP" --job-execution-name "$EXECUTION" --query properties.status -o tsv)
+            [ "$STATUS" = "Succeeded" ] && exit 0
+            [ "$STATUS" = "Failed" ] && exit 1
+            sleep 10
+          done
+          exit 1
+
+      - name: Deploy API
+        run: az containerapp update --name family-vault-api --resource-group "$RESOURCE_GROUP" --image "$IMAGE"
