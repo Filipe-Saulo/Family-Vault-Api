@@ -12,6 +12,19 @@ namespace FamilyVaultApi.UnitTests.Helpers
 
         public static ClaimsPrincipal CreateUnauthenticated() => new(new ClaimsIdentity());
 
+        // Conta da demonstração pública: Administrator com a claim demo
+        public static ClaimsPrincipal CreateDemoAdmin(string uid = "demo-1")
+        {
+            var identity = new ClaimsIdentity(new[]
+            {
+                new Claim("uid", uid),
+                new Claim(ClaimTypes.Role, "Administrator"),
+                new Claim(AppClaimTypes.Demo, DemoAccount.ClaimValue)
+            }, authenticationType: "TestAuth");
+
+            return new ClaimsPrincipal(identity);
+        }
+
         public static ClaimsPrincipal CreateUserWithPermission(string uid, PermissionCode permission)
         {
             var identity = new ClaimsIdentity(new[]

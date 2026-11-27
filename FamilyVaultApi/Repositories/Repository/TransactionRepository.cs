@@ -38,6 +38,9 @@ namespace FamilyVaultApi.Repositories.Repository
         {
             var q = _context.Transactions.AsQueryable();
 
+            if (query.DemoOnly)
+                q = q.Where(x => x.User.IsDemo);
+
             if (!string.IsNullOrWhiteSpace(query.UserId))
                 q = q.Where(x => x.UserId == query.UserId);
 

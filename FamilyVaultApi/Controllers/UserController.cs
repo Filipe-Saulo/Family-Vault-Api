@@ -26,7 +26,7 @@ namespace FamilyVaultApi.Controllers
         [Authorize(Policy = nameof(PermissionCode.ManageUsers))]
         public async Task<ActionResult<ApiResponse<PagedResult<UserResponseDto>>>> GetUsers([FromQuery] UserQueryRequestDto query)
         {
-            var result = await _userService.GetUsersAsync(query);
+            var result = await _userService.GetUsersAsync(query, User);
             return Ok(ApiResponse<PagedResult<UserResponseDto>>.Ok(result));
         }
 
@@ -82,7 +82,7 @@ namespace FamilyVaultApi.Controllers
         [Authorize(Roles = "Administrator")]
         public async Task<ActionResult<ApiResponse<List<PermissionCode>>>> GetPermissions([FromRoute] string userId)
         {
-            var result = await _userService.GetPermissionsAsync(userId);
+            var result = await _userService.GetPermissionsAsync(userId, User);
             return Ok(ApiResponse<List<PermissionCode>>.Ok(result));
         }
 

@@ -1,3 +1,4 @@
+using FamilyVaultApi.Common;
 using FamilyVaultApi.Models.Dto.Requests.Dashboard;
 using FamilyVaultApi.Models.Dto.Responses.Dashboard;
 using FamilyVaultApi.Repositories.IRepository;
@@ -18,6 +19,9 @@ namespace FamilyVaultApi.Services.Service
         public async Task<DashboardSummaryDto> GetSummaryAsync(DashboardQueryRequestDto query, ClaimsPrincipal userClaims)
         {
             query ??= new DashboardQueryRequestDto();
+
+            // A conta demo é Administrator, mas só enxerga os usuários da demo
+            query.DemoOnly = userClaims.IsDemo();
 
             var isAdmin = userClaims.IsInRole("Administrator");
             if (!isAdmin)

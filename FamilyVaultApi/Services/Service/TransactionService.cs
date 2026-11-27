@@ -58,6 +58,9 @@ namespace FamilyVaultApi.Services.Service
             if (query.PageSize <= 0) query.PageSize = 20;
             else if (query.PageSize > 100) query.PageSize = 100;
 
+            // A conta demo é Administrator, mas só enxerga os usuários da demo
+            query.DemoOnly = userClaims.IsDemo();
+
             var isAdmin = userClaims.IsInRole("Administrator");
             var hasManagePermission = userClaims.HasClaim(AppClaimTypes.Permission, nameof(PermissionCode.ManageTransactions));
 

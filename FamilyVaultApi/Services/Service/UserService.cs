@@ -110,8 +110,10 @@ namespace FamilyVaultApi.Services.Service
         }
 
 
-        public async Task<PagedResult<UserResponseDto>> GetUsersAsync(UserQueryRequestDto query)
+        public async Task<PagedResult<UserResponseDto>> GetUsersAsync(UserQueryRequestDto query, ClaimsPrincipal? userClaims = null)
         {
+            // A conta demo só lista os usuários da demo
+            query.DemoOnly = userClaims.IsDemo();
 
             if (query.PageNumber <= 0) query.PageNumber = 1;
             if (query.PageSize <= 0) query.PageSize = 20;
@@ -249,8 +251,12 @@ namespace FamilyVaultApi.Services.Service
                 throw new SecurityException("Você não tem permissão para acessar este recurso.");
         }
 
-        public async Task<List<PermissionCode>> GetPermissionsAsync(string userId)
+        public async Task<List<PermissionCode>> GetPermissionsAsync(string userId, ClaimsPrincipal? userClaims = null)
         {
+            // Para a conta demo, usuário de fora da demo não existe
+            if (userClaims.IsDemo() && !await _userRepository.IsDemoUserAsync(userId))
+                throw new NotFoundException("Usuário", userId);
+
             return await _userRepository.GetPermissionsAsync(userId);
         }
 

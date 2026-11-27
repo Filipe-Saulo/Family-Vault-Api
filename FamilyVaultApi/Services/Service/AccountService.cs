@@ -1,3 +1,4 @@
+using FamilyVaultApi.Common;
 using FamilyVaultApi.Common.Validators;
 using FamilyVaultApi.Exceptions;
 using FamilyVaultApi.Models.Dto.Requests.Account;
@@ -286,7 +287,9 @@ namespace FamilyVaultApi.Services.Service
 
         private async Task<string> BuildAccessTokenAsync(Data.Entities.User user, bool isAdmin, bool isUser)
         {
-            var userClaims = await _identityService.GetUserClaimsAsync(user);
+            var userClaims = (await _identityService.GetUserClaimsAsync(user)).ToList();
+            if (user.IsDemo)
+                userClaims.Add(new Claim(AppClaimTypes.Demo, DemoAccount.ClaimValue));
 
             var permissionClaims = new List<Claim>();
             if (isAdmin) permissionClaims.AddRange(await _identityService.GetRoleClaimsAsync("Administrator"));
